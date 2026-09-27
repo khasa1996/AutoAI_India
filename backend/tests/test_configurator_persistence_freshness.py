@@ -31,3 +31,10 @@ def test_saved_configuration_is_stale_when_current_asset_is_missing():
         {"estimated_on_road": 1250000},
         None,
     ) == (True, "Published verified configurator asset is unavailable")
+
+def test_saved_configuration_is_stale_when_active_asset_revision_changes():
+    assert assess_saved_configuration_freshness(
+        {"price_snapshot": 1250000, "asset_id": "asset-1", "asset_version": "2.0", "asset_revision_id": "rev-1"},
+        {"estimated_on_road": 1250000},
+        {"asset_id": "asset-1", "version": "2.0", "revision_id": "rev-2"},
+    ) == (True, "Published verified configurator asset revision has changed")

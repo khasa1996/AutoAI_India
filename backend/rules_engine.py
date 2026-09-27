@@ -136,11 +136,8 @@ async def validate_configuration(
         {"variant_id": config.variant_id}, {"_id": 0}
     )
     if variant_doc is None:
-        # Fallback: check legacy cars collection
-        legacy = await db.cars.find_one({"id": config.variant_id}, {"_id": 0})
-        if legacy is None:
-            errors.append(f"Variant '{config.variant_id}' not found")
-            return ValidationResult(valid=False, errors=errors)
+        errors.append(f"Variant '{config.variant_id}' not found")
+        return ValidationResult(valid=False, errors=errors)
 
     # ── 2. Option existence and availability checks ─────────────────────────
     if config.paint_id:

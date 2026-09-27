@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAnimations } from '@react-three/drei';
+import { LoopOnce } from 'three';
 import { filterAvailableAnimationMappings } from './animationRuntime';
 
 export const ANIMATION_NAMES = {
@@ -60,7 +61,7 @@ export function useVehicleAnimations(clips, ref, animationMappings = {}) {
     listenersRef.current.set(animationName, onFinished);
     mixer.addEventListener('finished', onFinished);
     action.reset();
-    action.setLoop(THREE_LoopOnce, 1);
+    action.setLoop(LoopOnce, 1);
     action.clampWhenFinished = true;
     action.play();
   }, [actions, mixer]);
@@ -76,5 +77,3 @@ export function useVehicleAnimations(clips, ref, animationMappings = {}) {
 
   return { play, availableAnimations, verifiedAnimationMappings };
 }
-
-const THREE_LoopOnce = 2200;

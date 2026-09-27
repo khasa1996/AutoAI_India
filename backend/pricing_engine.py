@@ -62,12 +62,12 @@ async def calculate_configuration_price(
     )
 
     if pricing_doc is None:
-        legacy = await db.cars.find_one({"id": variant_id}, {"_id": 0})
-        if legacy is None:
-            raise ValueError(f"Variant not found: {variant_id}")
-        base_ex_showroom = legacy.get("price_ex_showroom", 0)
-    else:
-        base_ex_showroom = pricing_doc.get("base_ex_showroom", 0)
+        raise ValueError("authoritative variant pricing is missing")
+
+    if str(pricing_doc.get("verification_status", "unverified")).casefold() != "verified":
+        raise ValueError("variant pricing verification is not complete")
+
+    base_ex_showroom = pricing_doc.get("base_ex_showroom", 0)
 
     if request.city and not await validate_pricing_location(db, variant_id, request.city):
         raise ValueError(f"No verified pricing is available for city: {request.city}")

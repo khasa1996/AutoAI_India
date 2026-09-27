@@ -36,6 +36,7 @@ class _DB:
             "brand_id": "demo-brand",
             "active": True,
             "verification_status": "verified",
+            "configurator_status": "AVAILABLE",
             "configurator_asset_id": "asset-1",
         })
         self.variant_pricing = _Collection(one={
@@ -60,6 +61,17 @@ class _DB:
         self.configurator_assets = _Collection(one={
             "asset_id": "asset-1",
             "variant_id": "demo-variant",
+            "active_revision_id": "rev-1",
+            "revisions": [
+                {
+                    "revision_id": "rev-1",
+                    "asset_id": "asset-1",
+                    "variant_id": "demo-variant",
+                    "version": "1.0.0",
+                    "checksum_sha256": "a" * 64,
+                    "state": "PUBLISHED",
+                }
+            ],
             "version": "1.0.0",
             "published": True,
             "validation_passed": True,
@@ -102,7 +114,9 @@ async def test_runtime_capabilities_returns_only_published_verified_runtime_cont
     assert payload["variant_id"] == "demo-variant"
     assert payload["ready"] is True
     assert payload["asset"]["asset_id"] == "asset-1"
+    assert payload["asset"]["revision_id"] == "rev-1"
     assert payload["asset"]["version"] == "1.0.0"
+    assert payload["asset"]["checksum_sha256"] == "a" * 64
     assert payload["asset"]["url"] == "https://cdn.example/vehicle.glb"
     assert payload["capabilities"]["interactions"] == ["doors", "sunroof", "camera_exterior"]
     assert payload["capabilities"]["cameras"] == ["front", "interior"]
@@ -139,3 +153,18 @@ async def test_runtime_capabilities_returns_404_for_unknown_variant():
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Vehicle variant not found"
+
+
+
+@pytest.mark.asyncio
+async def test_runtime_capabilities_reports_active_revision_blocker() -> None:
+    db = _DB()
+    db.configurator_assets.one["active_revision_id"] = "missing-revision"
+
+    async with AsyncClient(transport=ASGITransport(app=_app(db)), base_url="http://test") as client:
+        response = await client.get("/api/v1/configurator/demo-variant/capabilities")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ready"] is False
+    assert "configurator asset active revision is not published or is invalid" in payload["blockers"]

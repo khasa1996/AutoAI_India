@@ -4,22 +4,27 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from configurator_asset_revision import ConfiguratorAssetRevision, resolve_authoritative_asset_revision
 from configurator_vehicle_readiness import assess_vehicle_configurator_readiness
 from rules_engine import get_available_options_for_variant
 
 
-def _asset_runtime_contract(asset: Dict[str, Any]) -> Dict[str, Any]:
+def _asset_runtime_contract(
+    asset: Dict[str, Any],
+    revision: ConfiguratorAssetRevision,
+) -> Dict[str, Any]:
     """Expose only verified manifest data required by the runtime."""
     return {
         "asset_id": asset["asset_id"],
-        "version": asset["version"],
+        "revision_id": revision.revision_id,
+        "version": revision.version,
         "url": asset.get("cdn_url") or asset["url"],
         "format": asset["format"],
         "lod_level": asset["lod_level"],
         "provenance": asset["provenance"],
         "license_name": asset["license_name"],
         "publisher": asset["publisher"],
-        "checksum_sha256": asset["checksum_sha256"],
+        "checksum_sha256": revision.checksum_sha256,
         "file_size_bytes": asset["file_size_bytes"],
     }
 
@@ -61,6 +66,7 @@ async def build_runtime_capability_contract(
     ).to_list(100)
 
     asset = None
+    active_revision = None
     asset_id = vehicle.get("configurator_asset_id")
     if asset_id:
         asset = await db.configurator_assets.find_one(
@@ -72,6 +78,14 @@ async def build_runtime_capability_contract(
             },
             {"_id": 0},
         )
+        if asset is not None:
+            try:
+                active_revision = resolve_authoritative_asset_revision(
+                    asset,
+                    asset.get("revisions", []),
+                )
+            except (TypeError, ValueError):
+                active_revision = None
 
     readiness = assess_vehicle_configurator_readiness(
         vehicle,
@@ -82,11 +96,16 @@ async def build_runtime_capability_contract(
         asset,
     )
 
-    if not readiness["ready"] or asset is None:
+    if not readiness["ready"] or asset is None or active_revision is None:
+        blockers = list(readiness["blockers"])
+        if asset is not None and active_revision is None:
+            blockers.append(
+                "configurator asset active revision is not published or is invalid"
+            )
         return {
             "variant_id": variant_id,
             "ready": False,
-            "blockers": readiness["blockers"],
+            "blockers": blockers,
             "warnings": readiness["warnings"],
             "asset": None,
             "capabilities": None,
@@ -99,7 +118,7 @@ async def build_runtime_capability_contract(
         "ready": True,
         "blockers": [],
         "warnings": readiness["warnings"],
-        "asset": _asset_runtime_contract(asset),
+        "asset": _asset_runtime_contract(asset, active_revision),
         "capabilities": _capability_contract(asset),
         "options": options,
     }

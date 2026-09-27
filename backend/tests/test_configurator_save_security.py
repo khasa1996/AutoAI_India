@@ -21,7 +21,7 @@ def test_saved_document_uses_server_price_and_preserves_interaction_state():
         request=request,
         owner_phone="9876543210",
         server_price_snapshot={"estimated_on_road": 456789, "effective_date": "2026-09-11T00:00:00+00:00"},
-        server_asset={"asset_id": "asset-server", "version": "2.0"},
+        server_asset={"asset_id": "asset-server", "version": "2.0", "revision_id": "rev-7"},
         config_id="cfg-1",
         share_token="share-1",
         now="2026-09-11T00:00:00+00:00",
@@ -34,6 +34,7 @@ def test_saved_document_uses_server_price_and_preserves_interaction_state():
     }
     assert document["asset_id"] == "asset-server"
     assert document["asset_version"] == "2.0"
+    assert document["asset_revision_id"] == "rev-7"
     assert document["configuration"]["interaction"]["hood_open"] is True
     assert document["owner_phone"] == "9876543210"
 

@@ -41,6 +41,7 @@ describe('normalizeRuntimeCapabilityContract', () => {
       warnings: [],
       asset: {
         asset_id: 'asset-1',
+        revision_id: 'rev-1',
         version: '1.0.0',
         url: 'https://cdn.example/vehicle.glb',
         format: 'glb',
@@ -67,6 +68,7 @@ describe('normalizeRuntimeCapabilityContract', () => {
     expect(normalized).toEqual(expect.objectContaining({
       available: true,
       asset_id: 'asset-1',
+      revisionId: 'rev-1',
       url: 'https://cdn.example/vehicle.glb',
       version: '1.0.0',
       lodLevel: 0,

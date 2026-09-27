@@ -16,6 +16,13 @@ def test_extract_json_accepts_markdown_fenced_json():
     assert _extract_json('```json\n{"paint_id":"red"}\n```')["paint_id"] == "red"
 
 
+def test_safe_selection_rejects_unavailable_catalog_ids():
+    unavailable_catalog = catalog()
+    unavailable_catalog["colors"][0]["available"] = False
+    selected = _safe_selection({"paint_id": "red"}, unavailable_catalog, "v1")
+    assert selected.paint_id is None
+
+
 def test_safe_selection_rejects_ai_invented_ids():
     selected = _safe_selection({"variant_id": "attacker-variant", "paint_id": "red", "wheel_id": "invented-wheel", "accessory_ids": ["a1", "invented-accessory"]}, catalog(), "v1")
     assert selected.variant_id == "v1"
@@ -112,3 +119,9 @@ def test_ai_prompt_excludes_untrusted_client_price_from_authoritative_context():
     prompt = build_ai_prompt(intent, catalog(), PurchasableConfiguration(variant_id="v1"), "Delhi", {"client_price": 999})
     assert "client_price" not in prompt
     assert "999" not in prompt
+
+def test_textual_preferences_ignore_unavailable_options():
+    unavailable_catalog = catalog()
+    unavailable_catalog["colors"][0]["available"] = False
+    selected = resolve_textual_preferences("make it passion red", unavailable_catalog)
+    assert selected["paint_id"] is None

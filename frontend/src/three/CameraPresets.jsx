@@ -2,8 +2,8 @@
  * CameraPresets — named camera positions for the configurator.
  *
  * Auto-rotation pauses when the user interacts (orbit drag/pinch).
- * Desktop: mouse orbit, scroll zoom, keyboard shortcuts.
- * Mobile: one-finger orbit, pinch zoom.
+ * Desktop: mouse orbit, scroll zoom, pan.
+ * Mobile: one-finger orbit, pinch zoom and pan gestures supported by OrbitControls.
  */
 
 import { useEffect, useRef } from "react";
@@ -35,6 +35,20 @@ export function easeCameraTransition(progress) {
 
 export function getCameraTransitionDuration(reducedMotion = false) {
   return reducedMotion ? 0 : CAMERA_TRANSITION_DURATION_MS;
+}
+
+export function getConfiguratorControlSettings() {
+  return {
+    enablePan: true,
+    enableDamping: true,
+    dampingFactor: 0.08,
+    autoRotateSpeed: 0.8,
+    minDistance: 2.5,
+    maxDistance: 10,
+    minPolarAngle: Math.PI / 6,
+    maxPolarAngle: Math.PI / 1.9,
+    rotateSpeed: 0.7,
+  };
 }
 
 export function resolveCameraPreset(preset, allowedPresetNames) {
@@ -88,21 +102,22 @@ export function useCameraPreset(preset, controlsRef, allowedPresetNames) {
 export function ConfiguratorControls({ autoRotate, onInteract, controlsRef }) {
   const internalRef = useRef();
   const resolvedRef = controlsRef || internalRef;
+  const settings = getConfiguratorControlSettings();
 
   return (
     <OrbitControls
       ref={resolvedRef}
       makeDefault
-      enablePan={false}
+      enablePan={settings.enablePan}
       autoRotate={autoRotate}
-      autoRotateSpeed={0.8}
-      minDistance={2.5}
-      maxDistance={10}
-      minPolarAngle={Math.PI / 6}
-      maxPolarAngle={Math.PI / 1.9}
-      rotateSpeed={0.7}
-      enableDamping
-      dampingFactor={0.08}
+      autoRotateSpeed={settings.autoRotateSpeed}
+      minDistance={settings.minDistance}
+      maxDistance={settings.maxDistance}
+      minPolarAngle={settings.minPolarAngle}
+      maxPolarAngle={settings.maxPolarAngle}
+      rotateSpeed={settings.rotateSpeed}
+      enableDamping={settings.enableDamping}
+      dampingFactor={settings.dampingFactor}
       onStart={onInteract}
     />
   );

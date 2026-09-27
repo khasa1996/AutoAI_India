@@ -4,7 +4,7 @@
  * Lighting is a SHOWROOM INTERACTION — it does NOT affect vehicle price.
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 export const LIGHTING_MATERIAL_NAMES = {
@@ -51,7 +51,15 @@ export function buildLightingMaterialIndex(scene) {
   return index;
 }
 
+export function resolveLightingScene(sceneOrRef) {
+  if (sceneOrRef && typeof sceneOrRef === 'object' && 'current' in sceneOrRef) {
+    return sceneOrRef.current ?? null;
+  }
+  return sceneOrRef ?? null;
+}
+
 function setMaterialEmissive(materials, on, color = '#ffffff', intensity = 2) {
+  if (!Array.isArray(materials)) return;
   materials.forEach((material) => {
     material.emissive.set(on ? color : '#000000');
     material.emissiveIntensity = on ? intensity : 0;
@@ -63,9 +71,13 @@ export function useLightingController(sceneOrRef, lightingState, supportedIntera
   const headlightRef = useRef(null);
   const taillightRef = useRef(null);
   const indicatorTimerRef = useRef(null);
-  const scene = sceneOrRef?.current ?? sceneOrRef ?? null;
+  const [scene, setScene] = useState(() => resolveLightingScene(sceneOrRef));
   const normalizedLighting = normalizeLightingState(lightingState, supportedInteractions);
   const materialIndex = useMemo(() => buildLightingMaterialIndex(scene), [scene]);
+
+  useEffect(() => {
+    setScene(resolveLightingScene(sceneOrRef));
+  }, [sceneOrRef]);
 
   useEffect(() => {
     if (!materialIndex.size) return undefined;

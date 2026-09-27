@@ -31,7 +31,7 @@ class FakeDatabase:
 
 def test_selected_paint_must_be_available() -> None:
     db = FakeDatabase(
-        pricing=[{"variant_id": "variant-1", "base_ex_showroom": 1000000}],
+        pricing=[{"variant_id": "variant-1", "base_ex_showroom": 1000000, "verification_status": "verified"}],
         colors=[{
             "variant_id": "variant-1",
             "color_id": "red-01",
@@ -53,6 +53,7 @@ def test_price_totals_use_authoritative_option_deltas() -> None:
         pricing=[{
             "variant_id": "variant-1",
             "base_ex_showroom": 1000000,
+            "verification_status": "verified",
             "city_pricing": [{
                 "city": "Delhi",
                 "state": "Delhi",
@@ -78,3 +79,30 @@ def test_price_totals_use_authoritative_option_deltas() -> None:
     assert result.total_options == 40000
     assert result.subtotal_ex_showroom == 1040000
     assert result.estimated_on_road == 1135000
+
+
+def test_unverified_variant_pricing_is_rejected() -> None:
+    db = FakeDatabase(
+        pricing=[{
+            "variant_id": "variant-1",
+            "base_ex_showroom": 1000000,
+            "source": "unverified-source",
+            "verification_status": "unverified",
+        }],
+    )
+    request = ConfigurationPriceRequest(
+        configuration=PurchasableConfiguration(variant_id="variant-1")
+    )
+
+    with pytest.raises(ValueError, match="variant pricing verification is not complete"):
+        asyncio.run(calculate_configuration_price(request, db))
+
+
+def test_missing_variant_pricing_is_rejected_for_configurator_pricing() -> None:
+    db = FakeDatabase()
+    request = ConfigurationPriceRequest(
+        configuration=PurchasableConfiguration(variant_id="variant-1")
+    )
+
+    with pytest.raises(ValueError, match="authoritative variant pricing is missing"):
+        asyncio.run(calculate_configuration_price(request, db))

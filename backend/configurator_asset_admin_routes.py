@@ -364,6 +364,18 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
             raise HTTPException(status_code=404, detail="Asset not found")
         asset = ConfiguratorAsset(**asset_doc)
         if request.publish:
+            try:
+                from configurator_asset_revision import resolve_authoritative_asset_revision
+
+                resolve_authoritative_asset_revision(
+                    asset_doc,
+                    asset_doc.get("revisions", []),
+                )
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Asset must have an authoritative PUBLISHED active revision before publication",
+                ) from exc
             if not asset.is_publishable():
                 raise HTTPException(status_code=422, detail="Asset does not satisfy publication gates")
             update = {"published": True, "updated_at": datetime.now(timezone.utc).isoformat(), "storage_status": "PUBLISHED"}

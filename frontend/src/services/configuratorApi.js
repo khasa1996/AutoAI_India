@@ -37,6 +37,7 @@ export function normalizeRuntimeCapabilityContract(contract) {
     url: asset.url,
     format: asset.format,
     version: asset.version,
+    revisionId: asset.revision_id,
     lodLevel: asset.lod_level,
     provenance: asset.provenance,
     licenseName: asset.license_name,

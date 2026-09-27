@@ -21,6 +21,13 @@ test('builds a runtime state from verified manifest capabilities', () => {
   });
 });
 
+test('does not synthesize fallback animation names when a verified mapping is absent', () => {
+  expect(buildVehicleRuntimeState({
+    supportedInteractions: ['doors'],
+    interactionAnimationNames: {},
+  }).interactionAnimationNames).toEqual({});
+});
+
 test('does not activate unsupported interaction animations', () => {
   expect(buildVehicleRuntimeState({
     supportedInteractions: ['doors'],

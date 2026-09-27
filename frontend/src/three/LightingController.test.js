@@ -1,4 +1,4 @@
-import { normalizeLightingState, buildLightingMaterialIndex, LIGHTING_MATERIAL_NAMES } from './LightingController';
+import { normalizeLightingState, buildLightingMaterialIndex, LIGHTING_MATERIAL_NAMES, resolveLightingScene } from './LightingController';
 
 test('keeps only lighting capabilities declared by the verified asset', () => {
   expect(normalizeLightingState({
@@ -53,4 +53,11 @@ test('indexes only verified lighting material names', () => {
   expect(traversed).toHaveLength(2);
   expect(index.get(LIGHTING_MATERIAL_NAMES.HEADLIGHT)).toEqual([headlight]);
   expect(index.has('MAT_UNKNOWN')).toBe(false);
+});
+
+test('resolves a mounted scene from a ref after the React commit', () => {
+  const mountedScene = { traverse: () => {} };
+  expect(resolveLightingScene({ current: mountedScene })).toBe(mountedScene);
+  expect(resolveLightingScene({ current: null })).toBeNull();
+  expect(resolveLightingScene(mountedScene)).toBe(mountedScene);
 });

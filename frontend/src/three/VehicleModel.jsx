@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { ANIMATION_NAMES, useVehicleAnimations } from './AnimationController';
+import { useVehicleAnimations } from './AnimationController';
 import { collectOwnedMaterialResources, disposeOwnedMaterialResources, markRuntimeOwnedMaterials } from './runtimeLifecycle';
 import { applyRuntimeMeshVisibility, applyRuntimeInteriorMaterials, canRenderLoadedRuntime, resolveRuntimeAsset, buildRuntimeNodeIndex, buildRuntimeMaterialIndex } from './vehicleRuntime';
 import { projectVerifiedVisualConfiguration } from '../components/configurator/runtimeVisualConfiguration';
@@ -80,22 +80,22 @@ function LoadedVehicle({ asset, runtime, purchasable, interaction }) {
     previousInteractionRef.current = interaction;
     if (!previous) return;
     const supported = new Set(runtime.supportedInteractions);
-    const playToggle = (capability, current, before, group, openKey, closeKey, openFallback, closeFallback) => {
+    const playToggle = (capability, current, before, group, openKey, closeKey) => {
       if (!supported.has(capability) || current === before) return;
       const mapping = verifiedAnimationMappings?.[group];
       const requestedKey = current ? openKey : closeKey;
       const fallback = current ? openFallback : closeFallback;
-      const animationName = mapping?.[requestedKey] || (mapping ? null : fallback);
+      const animationName = mapping?.[requestedKey] || null;
       if (animationName) play(animationName);
     };
-    playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_open', 'front_left_close', ANIMATION_NAMES.DOOR_FL_OPEN, ANIMATION_NAMES.DOOR_FL_CLOSE);
-    playToggle('doors', interaction.doors.frontRight, previous.doors.frontRight, 'doors', 'front_right_open', 'front_right_close', ANIMATION_NAMES.DOOR_FR_OPEN, ANIMATION_NAMES.DOOR_FR_CLOSE);
-    playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, 'doors', 'rear_left_open', 'rear_left_close', ANIMATION_NAMES.DOOR_RL_OPEN, ANIMATION_NAMES.DOOR_RL_CLOSE);
-    playToggle('doors', interaction.doors.rearRight, previous.doors.rearRight, 'doors', 'rear_right_open', 'rear_right_close', ANIMATION_NAMES.DOOR_RR_OPEN, ANIMATION_NAMES.DOOR_RR_CLOSE);
-    playToggle('hood', interaction.hoodOpen, previous.hoodOpen, 'hood', 'open', 'close', ANIMATION_NAMES.HOOD_OPEN, ANIMATION_NAMES.HOOD_CLOSE);
-    playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', 'close', ANIMATION_NAMES.BOOT_OPEN, ANIMATION_NAMES.BOOT_CLOSE);
-    playToggle('frunk', interaction.frunkOpen, previous.frunkOpen, 'frunk', 'open', 'close', ANIMATION_NAMES.FRUNK_OPEN, ANIMATION_NAMES.FRUNK_CLOSE);
-    playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, 'sunroof', 'open', 'close', ANIMATION_NAMES.SUNROOF_OPEN, ANIMATION_NAMES.SUNROOF_CLOSE);
+    playToggle('doors', interaction.doors.frontLeft, previous.doors.frontLeft, 'doors', 'front_left_open', 'front_left_close');
+    playToggle('doors', interaction.doors.frontRight, previous.doors.frontRight, 'doors', 'front_right_open', 'front_right_close');
+    playToggle('doors', interaction.doors.rearLeft, previous.doors.rearLeft, 'doors', 'rear_left_open', 'rear_left_close');
+    playToggle('doors', interaction.doors.rearRight, previous.doors.rearRight, 'doors', 'rear_right_open', 'rear_right_close');
+    playToggle('hood', interaction.hoodOpen, previous.hoodOpen, 'hood', 'open', 'close');
+    playToggle('boot', interaction.bootOpen, previous.bootOpen, 'boot', 'open', 'close');
+    playToggle('frunk', interaction.frunkOpen, previous.frunkOpen, 'frunk', 'open', 'close');
+    playToggle('sunroof', interaction.sunroofOpen, previous.sunroofOpen, 'sunroof', 'open', 'close');
   }, [interaction, play, runtime, verifiedAnimationMappings]);
 
   useEffect(() => () => disposeOwnedMaterialResources(ownedMaterials), [ownedMaterials]);

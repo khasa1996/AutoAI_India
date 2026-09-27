@@ -34,7 +34,7 @@ class _Collection:
 class _DB:
     def __init__(self):
         self.variants = _Collection([
-            {"variant_id": "v1", "brand_id": "b1", "model_id": "m1", "name": "Diesel SUV", "market_segment": "SUV", "specs": {"fuel_type": "Diesel"}, "active": True, "configurator_status": "AVAILABLE", "configurator_asset_id": "asset-1"},
+            {"variant_id": "v1", "brand_id": "b1", "model_id": "m1", "name": "Diesel SUV", "market_segment": "SUV", "specs": {"fuel_type": "Diesel"}, "active": True, "configurator_status": "AVAILABLE", "configurator_asset_id": "asset-1", "verification_status": "verified"},
             {"variant_id": "v2", "brand_id": "b2", "model_id": "m2", "name": "Petrol SUV", "market_segment": "SUV", "specs": {"fuel_type": "Petrol"}, "active": True, "configurator_status": "COMING_SOON"},
         ])
         self.variant_pricing = _Collection([
@@ -46,8 +46,36 @@ class _DB:
                 {"city": "Panipat", "state": "Haryana", "ex_showroom": 1100000, "verification_status": "verified"},
             ]},
         ])
+        self.variant_colors = _Collection([{"variant_id": "v1", "color_id": "black", "available": True}])
+        self.variant_wheels = _Collection([{"variant_id": "v1", "wheel_id": "alloy", "available": True}])
+        self.variant_interiors = _Collection([{"variant_id": "v1", "interior_id": "black", "available": True}])
+        self.configurator_options = _Collection([])
         self.configurator_assets = _Collection([
-            {"asset_id": "asset-1", "variant_id": "v1", "version": "1.0.0", "published": True, "validation_passed": True},
+            {
+                "asset_id": "asset-1",
+                "variant_id": "v1",
+                "active_revision_id": "rev-1",
+                "revisions": [{
+                    "revision_id": "rev-1",
+                    "asset_id": "asset-1",
+                    "variant_id": "v1",
+                    "version": "1.0.0",
+                    "checksum_sha256": "a" * 64,
+                    "state": "PUBLISHED",
+                }],
+                "version": "1.0.0",
+                "url": "https://cdn.example/vehicle.glb",
+                "format": "glb",
+                "lod_level": 0,
+                "published": True,
+                "validation_passed": True,
+                "provenance": "AUTO_AI_LICENSED",
+                "license_name": "Licensed",
+                "publisher": "Auto AI India",
+                "checksum_sha256": "a" * 64,
+                "file_size_bytes": 1024,
+                "storage_status": "PUBLISHED",
+            },
         ])
 
 

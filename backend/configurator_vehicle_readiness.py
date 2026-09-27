@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Iterable, Optional
 
+from configurator_asset_revision import resolve_authoritative_asset_revision
 
 _PUBLISHABLE_PROVENANCE = {
     "OEM_AUTHORIZED",
@@ -17,7 +18,11 @@ _SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 def _available_options(options: Optional[Iterable[Dict[str, Any]]]) -> list[Dict[str, Any]]:
     if not options:
         return []
-    return [option for option in options if isinstance(option, dict) and option.get("available", True) is True]
+    return [
+        option
+        for option in options
+        if isinstance(option, dict) and option.get("available", True) is True
+    ]
 
 
 def assess_vehicle_configurator_readiness(
@@ -43,6 +48,8 @@ def assess_vehicle_configurator_readiness(
         blockers.append("vehicle variant is inactive")
     if vehicle.get("verification_status") != "verified":
         blockers.append("vehicle verification is not complete")
+    if vehicle.get("configurator_status") != "AVAILABLE":
+        blockers.append("configurator status is not AVAILABLE")
 
     if pricing is None:
         blockers.append("authoritative variant pricing is missing")
@@ -84,7 +91,6 @@ def assess_vehicle_configurator_readiness(
             blockers.append("configurator asset has not passed validation")
         if asset.get("provenance") not in _PUBLISHABLE_PROVENANCE:
             blockers.append("configurator asset provenance is not publishable")
-
         if not asset.get("license_name") or not asset.get("publisher"):
             blockers.append("configurator asset license metadata is incomplete")
 
@@ -95,6 +101,18 @@ def assess_vehicle_configurator_readiness(
         if not isinstance(checksum, str) or not _SHA256_PATTERN.fullmatch(checksum):
             if "configurator asset integrity evidence is incomplete" not in blockers:
                 blockers.append("configurator asset integrity evidence is incomplete")
+
+        try:
+            active_revision = resolve_authoritative_asset_revision(
+                asset,
+                asset.get("revisions", []),
+            )
+        except (TypeError, ValueError):
+            active_revision = None
+            blockers.append("configurator asset active revision is not published or is invalid")
+        else:
+            if active_revision.checksum_sha256 != checksum:
+                blockers.append("configurator asset checksum does not match active revision")
 
         if asset.get("storage_status") != "PUBLISHED":
             blockers.append("configurator asset storage publication state is not complete")

@@ -3,6 +3,7 @@ import {
   CAMERA_TRANSITION_DURATION_MS,
   easeCameraTransition,
   getCameraTransitionDuration,
+  getConfiguratorControlSettings,
 } from './CameraPresets';
 
 describe('camera transitions', () => {
@@ -35,5 +36,12 @@ describe('camera transitions', () => {
     expect(getCameraTransitionDuration()).toBe(CAMERA_TRANSITION_DURATION_MS);
     expect(getCameraTransitionDuration(false)).toBe(650);
     expect(getCameraTransitionDuration(true)).toBe(0);
+  });
+
+  test('keeps pan enabled for the Ultra 3D configurator desktop and mobile controls', () => {
+    expect(getConfiguratorControlSettings()).toEqual(expect.objectContaining({
+      enablePan: true,
+      enableDamping: true,
+    }));
   });
 });

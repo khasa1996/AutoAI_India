@@ -43,6 +43,7 @@ async def revalidate_saved_configuration(
     if current_asset is not None:
         refreshed["asset_id"] = current_asset.get("asset_id")
         refreshed["asset_version"] = current_asset.get("version")
+        refreshed["asset_revision_id"] = current_asset.get("revision_id")
 
     return refreshed
 
@@ -62,4 +63,6 @@ def assess_saved_configuration_freshness(
         or saved_document.get("asset_version") != current_asset.get("version")
     ):
         return True, "Published verified configurator asset has changed"
+    if saved_document.get("asset_revision_id") != current_asset.get("revision_id"):
+        return True, "Published verified configurator asset revision has changed"
     return False, None

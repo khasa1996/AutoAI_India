@@ -11,7 +11,7 @@ from vehicle_schemas import ConfiguratorStatus
 
 class FakeCollection:
     def __init__(self, documents: list[Optional[Dict[str, Any]]]) -> None:
-        self.documents = iter(documents)
+        self.documents = documents
         self.queries: list[Dict[str, Any]] = []
 
     async def find_one(
@@ -20,21 +20,57 @@ class FakeCollection:
         projection: Optional[Dict[str, int]] = None,
     ) -> Optional[Dict[str, Any]]:
         self.queries.append(query)
-        return next(self.documents)
+        for document in self.documents:
+            if document is not None and all(document.get(key) == value for key, value in query.items()):
+                return document
+        return None
+
+    def find(
+        self,
+        _query: Dict[str, Any],
+        _projection: Optional[Dict[str, int]] = None,
+    ) -> Any:
+        return _AsyncCursor([
+            document for document in self.documents
+            if document is not None and all(document.get(key) == value for key, value in _query.items())
+        ])
+
+
+class _AsyncCursor:
+    def __init__(self, documents: list[Dict[str, Any]]) -> None:
+        self.documents = documents
+
+    async def to_list(self, _limit: int) -> list[Dict[str, Any]]:
+        return self.documents
 
 
 class FakeDatabase:
     def __init__(self) -> None:
         self.variants = FakeCollection([
             {
+                "variant_id": "variant-1",
+                "active": True,
+                "verification_status": "verified",
                 "configurator_status": ConfiguratorStatus.AVAILABLE,
                 "configurator_asset_id": "asset-1",
             }
         ])
+        self.variant_pricing = FakeCollection([{
+            "variant_id": "variant-1",
+            "base_ex_showroom": 1000000,
+            "verification_status": "verified",
+            "source": "OEM",
+        }])
+        self.variant_colors = FakeCollection([{"variant_id": "variant-1", "color_id": "black", "available": True}])
+        self.variant_wheels = FakeCollection([{"variant_id": "variant-1", "wheel_id": "alloy", "available": True}])
+        self.variant_interiors = FakeCollection([{"variant_id": "variant-1", "interior_id": "black", "available": True}])
+        self.configurator_options = FakeCollection([])
         self.configurator_assets = FakeCollection([
             {
                 "asset_id": "asset-1",
                 "variant_id": "variant-1",
+                "active_revision_id": "rev-1",
+                "revisions": [{"revision_id": "rev-1", "asset_id": "asset-1", "variant_id": "variant-1", "version": "v1", "checksum_sha256": "a" * 64, "state": "PUBLISHED"}],
                 "url": "https://cdn.example.com/model.glb",
                 "format": "glb",
                 "version": "v1",
@@ -49,6 +85,12 @@ class FakeDatabase:
                 "option_mesh_names": {"roof": {"sunroof": ["Sunroof"]}},
                 "camera_preset_names": ["exterior", "interior"],
                 "interaction_animation_names": {"doors": "door-open"},
+                "provenance": "AUTO_AI_LICENSED",
+                "license_name": "Licensed",
+                "publisher": "Auto AI India",
+                "checksum_sha256": "a" * 64,
+                "file_size_bytes": 1024,
+                "storage_status": "PUBLISHED",
             }
         ])
 

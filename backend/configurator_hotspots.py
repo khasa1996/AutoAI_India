@@ -59,6 +59,12 @@ def make_hotspot_router(db: AsyncIOMotorDatabase) -> APIRouter:
         if not asset:
             return {"variant_id": variant_id, "available": False, "hotspots": []}
         try:
+            from configurator_asset_revision import resolve_authoritative_asset_revision
+
+            resolve_authoritative_asset_revision(asset, asset.get("revisions", []))
+        except (TypeError, ValueError):
+            return {"variant_id": variant_id, "available": False, "hotspots": []}
+        try:
             hotspots = [ConfiguratorHotspot.model_validate(item) for item in asset.get("hotspots", [])]
         except Exception as exc:
             raise HTTPException(status_code=500, detail="Published hotspot metadata is invalid") from exc

@@ -9,6 +9,7 @@ from typing import Awaitable, Callable, Dict, List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from configurator_runtime_capabilities import resolve_authoritative_asset_revision
 from configurator_schemas import (
     AIConfiguratorIntent,
     AIConfiguratorResponse,
@@ -23,6 +24,17 @@ from configurator_persistence import revalidate_saved_configuration
 from vehicle_schemas import BrandSummary, ConfiguratorStatus, ModelSummary, VariantDetail, VariantSummary
 from pricing_engine import calculate_configuration_price, validate_asset_url
 from rules_engine import get_available_options_for_variant, validate_configuration
+
+
+async def _require_catalog_variant(
+    db: AsyncIOMotorDatabase,
+    variant_id: str,
+) -> Dict[str, object]:
+    """Require a canonical configurator variant; never fall back to legacy cars."""
+    variant = await db.variants.find_one({"variant_id": variant_id}, {"_id": 0})
+    if not variant:
+        raise HTTPException(status_code=404, detail="Variant not found")
+    return variant
 
 
 async def _resolve_optional_user_phone(
@@ -61,6 +73,7 @@ def build_saved_configuration_document(
         "price_breakdown": server_price_snapshot,
         "asset_id": server_asset.get("asset_id") if server_asset else None,
         "asset_version": server_asset.get("version") if server_asset else None,
+        "asset_revision_id": server_asset.get("revision_id") if server_asset else None,
         "stale": bool(stale_reason),
         "stale_reason": stale_reason,
         "created_at": now,
@@ -73,24 +86,41 @@ async def resolve_saved_configuration_asset(
     variant_id: str,
     requested_asset_id: Optional[str],
 ) -> Optional[Dict[str, object]]:
-    """Resolve the current published verified asset assigned to a variant."""
+    """Resolve only the current published verified asset assigned to a variant."""
     variant = await db.variants.find_one(
         {"variant_id": variant_id},
         {"_id": 0, "configurator_asset_id": 1},
     )
     assigned_asset_id = variant.get("configurator_asset_id") if variant else None
-    asset_id = assigned_asset_id or requested_asset_id
+    if not assigned_asset_id:
+        return None
+    asset_id = assigned_asset_id
     if not asset_id:
         return None
-    return await db.configurator_assets.find_one(
+    asset = await db.configurator_assets.find_one(
         {
             "asset_id": asset_id,
             "variant_id": variant_id,
             "published": True,
             "validation_passed": True,
         },
-        {"_id": 0, "asset_id": 1, "version": 1},
+        {"_id": 0},
     )
+    if not asset:
+        return None
+    try:
+        revision = resolve_authoritative_asset_revision(
+            asset,
+            asset.get("revisions", []),
+        )
+    except (TypeError, ValueError):
+        return None
+    return {
+        "asset_id": asset["asset_id"],
+        "revision_id": revision.revision_id,
+        "version": revision.version,
+        "checksum_sha256": revision.checksum_sha256,
+    }
 
 
 def make_configurator_router(
@@ -169,30 +199,71 @@ def make_configurator_router(
 
     @router.get("/configurator/{variant_id}/availability")
     async def get_configurator_availability(variant_id: str):
-        variant = await db.variants.find_one(
-            {"variant_id": variant_id},
-            {"_id": 0, "configurator_status": 1, "configurator_asset_id": 1},
+        variant = await _require_catalog_variant(db, variant_id)
+        pricing = await db.variant_pricing.find_one({"variant_id": variant_id}, {"_id": 0})
+        colors = await db.variant_colors.find({"variant_id": variant_id}, {"_id": 0}).to_list(30)
+        wheels = await db.variant_wheels.find({"variant_id": variant_id}, {"_id": 0}).to_list(20)
+        interiors = await db.variant_interiors.find({"variant_id": variant_id}, {"_id": 0}).to_list(15)
+
+        asset = None
+        asset_id = variant.get("configurator_asset_id")
+        if asset_id:
+            asset = await db.configurator_assets.find_one(
+                {
+                    "asset_id": asset_id,
+                    "variant_id": variant_id,
+                    "published": True,
+                    "validation_passed": True,
+                },
+                {"_id": 0},
+            )
+
+        from configurator_vehicle_readiness import assess_vehicle_configurator_readiness
+
+        readiness = assess_vehicle_configurator_readiness(
+            variant,
+            pricing,
+            colors,
+            wheels,
+            interiors,
+            asset,
         )
-        if not variant:
-            legacy = await db.cars.find_one({"id": variant_id}, {"_id": 0})
-            if not legacy:
-                raise HTTPException(status_code=404, detail="Variant not found")
-            return {
-                "variant_id": variant_id,
-                "configurator_status": ConfiguratorStatus.COMING_SOON,
-                "asset_id": None,
-                "message": "3D Configurator Coming Soon",
-            }
-        status = variant.get("configurator_status", ConfiguratorStatus.COMING_SOON)
+        configured_status = variant.get(
+            "configurator_status",
+            ConfiguratorStatus.COMING_SOON,
+        )
+        status = (
+            ConfiguratorStatus.AVAILABLE
+            if readiness["ready"]
+            else (
+                ConfiguratorStatus.COMING_SOON
+                if configured_status == ConfiguratorStatus.AVAILABLE
+                else configured_status
+            )
+        )
         return {
             "variant_id": variant_id,
             "configurator_status": status,
-            "asset_id": variant.get("configurator_asset_id"),
+            "available": bool(readiness["ready"]),
+            "asset_id": asset_id if readiness["ready"] else None,
             "message": _status_message(status),
+            "blockers": readiness["blockers"],
+            "warnings": readiness["warnings"],
         }
 
     @router.get("/configurator/{variant_id}/asset")
     async def get_configurator_asset(variant_id: str):
+        from configurator_runtime_capabilities import build_runtime_capability_contract
+
+        contract = await build_runtime_capability_contract(db, variant_id)
+        if not contract["ready"]:
+            return {
+                "variant_id": variant_id,
+                "available": False,
+                "message": "3D asset is not ready for production runtime",
+                "readiness_blockers": contract["blockers"],
+            }
+
         variant = await db.variants.find_one(
             {"variant_id": variant_id},
             {"_id": 0, "configurator_status": 1, "configurator_asset_id": 1},
@@ -224,6 +295,17 @@ def make_configurator_router(
                 "available": False,
                 "message": "3D asset is not yet published or has not passed validation",
             }
+        try:
+            revision = resolve_authoritative_asset_revision(
+                asset,
+                asset.get("revisions", []),
+            )
+        except (TypeError, ValueError):
+            return {
+                "variant_id": variant_id,
+                "available": False,
+                "message": "3D asset active revision is not published or is invalid",
+            }
         return {
             "variant_id": variant_id,
             "available": True,
@@ -231,7 +313,8 @@ def make_configurator_router(
                 "asset_id": asset["asset_id"],
                 "url": asset.get("cdn_url") or asset["url"],
                 "format": asset["format"],
-                "version": asset["version"],
+                "revision_id": revision.revision_id,
+                "version": revision.version,
                 "lod_level": asset["lod_level"],
                 "supported_interactions": asset.get("supported_interactions", []),
                 "paint_material_names": asset.get("paint_material_names", []),
@@ -246,12 +329,8 @@ def make_configurator_router(
 
     @router.get("/configurator/{variant_id}/options")
     async def get_configurator_options(variant_id: str):
+        await _require_catalog_variant(db, variant_id)
         options = await get_available_options_for_variant(variant_id, db)
-        variant = await db.variants.find_one({"variant_id": variant_id}, {"_id": 0, "configurator_status": 1})
-        if not variant:
-            legacy = await db.cars.find_one({"id": variant_id}, {"_id": 0})
-            if not legacy:
-                raise HTTPException(status_code=404, detail="Variant not found")
         return {"variant_id": variant_id, **options}
 
     @router.get("/configurator/{variant_id}/rules")
@@ -264,10 +343,12 @@ def make_configurator_router(
 
     @router.post("/configurator/validate", response_model=ValidationResult)
     async def validate_config(request: ConfigurationValidationRequest):
+        await _require_catalog_variant(db, request.configuration.variant_id)
         return await validate_configuration(request, db)
 
     @router.post("/configurator/price", response_model=ConfigurationPriceResponse)
     async def calculate_price(request: ConfigurationPriceRequest):
+        await _require_catalog_variant(db, request.configuration.variant_id)
         validation = await validate_configuration(
             ConfigurationValidationRequest(configuration=request.configuration), db
         )
@@ -452,6 +533,7 @@ def _public_configuration_response(doc: Dict[str, object]) -> Dict[str, object]:
         "price_breakdown",
         "asset_id",
         "asset_version",
+        "asset_revision_id",
         "stale",
         "stale_reason",
         "created_at",
