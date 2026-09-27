@@ -7,14 +7,11 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends
 
 from configurator_production_audit import audit_configurator_catalog
-from server import require_admin
-
-
-def make_configurator_production_audit_router(db: Any) -> APIRouter:
+def make_configurator_production_audit_router(db: Any, require_admin_dependency: Any) -> APIRouter:
     router = APIRouter(prefix="/api/v1", tags=["configurator-ops"])
 
     @router.get("/admin/configurator/catalog-audit")
-    async def catalog_audit(_: str = Depends(require_admin)) -> Dict[str, Any]:
+    async def catalog_audit(_: str = Depends(require_admin_dependency)) -> Dict[str, Any]:
         return await audit_configurator_catalog(db)
 
     return router
