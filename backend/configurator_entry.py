@@ -9,9 +9,11 @@ is created here.
 
 from server import app, db, optional_user_phone
 from configurator_composition import mount_configurator_router
+from configurator_production_audit_routes import make_configurator_production_audit_router
 
 
 mount_configurator_router(app, db, optional_user_phone)
+app.include_router(make_configurator_production_audit_router(db))
 
 
 @app.on_event("startup")
