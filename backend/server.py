@@ -28,6 +28,7 @@ from razorpay_gateway import (
 )
 from cars_data import CARS_SEED, NEWS_SEED
 from configurator_composition import mount_configurator_router
+from configurator_production_audit_routes import make_configurator_production_audit_router
 import security
 
 ROOT_DIR = Path(__file__).parent
@@ -526,3 +527,4 @@ async def chat_history(session_id: str, phone: Optional[str] = Depends(optional_
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_credentials=ALLOW_CREDENTIALS, allow_methods=["*"], allow_headers=["*"])
 app.include_router(api_router)
 mount_configurator_router(app, db, optional_user_phone)
+app.include_router(make_configurator_production_audit_router(db, require_admin))
