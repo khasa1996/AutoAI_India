@@ -30,44 +30,52 @@ import { I18nProvider } from "./lib/i18n";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 
 function App() {
+  const demoOnly =
+    typeof window !== "undefined" && window.location.pathname === "/configurator-demo";
+
   return (
     <AppErrorBoundary>
-      <div className="App bg-[#050505] text-white">
-        <I18nProvider>
-          <BrowserRouter>
-            <Navbar />
-            <main>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/compare" element={<Compare />} />
-                <Route path="/recommend" element={<Recommend />} />
-                <Route path="/cars" element={<Cars />} />
-                <Route path="/emi" element={<EMI />} />
-                <Route path="/news" element={<News />} />
-                <Route path="/book/:carId" element={<BookCar />} />
-                <Route path="/showroom/:carId" element={<Showroom />} />
-                <Route path="/configurator-demo" element={<DemoConfigurator />} />
-                <Route path="/configurator/:variantId" element={<ConfiguratorExperience />} />
-                <Route path="/configurator/history" element={<ConfiguratorHistory />} />
-                <Route path="/configurator/conversion" element={<ConfiguratorConversion />} />
-                <Route path="/admin/configurator-assets" element={<ConfiguratorAssetManager />} />
-                <Route path="/admin/configurator-assets/upload" element={<ConfiguratorAssetUpload />} />
-                <Route path="/premium" element={<Premium />} />
-                <Route path="/dealer" element={<Dealer />} />
-                <Route path="/dealers/apply" element={<DealerApply />} />
-                <Route path="/admin" element={<Admin />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/my-bookings" element={<MyBookings />} />
-              </Routes>
-            </main>
-            <Footer />
-            <ChatDrawer />
-            <InstallPWA />
-            <Toaster />
-          </BrowserRouter>
-        </I18nProvider>
-      </div>
+      <I18nProvider>
+        <BrowserRouter>
+          {demoOnly ? (
+            <Routes>
+              <Route path="/configurator-demo" element={<DemoConfigurator />} />
+            </Routes>
+          ) : (
+            <div className="App bg-[#050505] text-white">
+              <Navbar />
+              <main>
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/compare" element={<Compare />} />
+                  <Route path="/recommend" element={<Recommend />} />
+                  <Route path="/cars" element={<Cars />} />
+                  <Route path="/emi" element={<EMI />} />
+                  <Route path="/news" element={<News />} />
+                  <Route path="/book/:carId" element={<BookCar />} />
+                  <Route path="/showroom/:carId" element={<Showroom />} />
+                  <Route path="/configurator/:variantId" element={<ConfiguratorExperience />} />
+                  <Route path="/configurator/history" element={<ConfiguratorHistory />} />
+                  <Route path="/configurator/conversion" element={<ConfiguratorConversion />} />
+                  <Route path="/admin/configurator-assets" element={<ConfiguratorAssetManager />} />
+                  <Route path="/admin/configurator-assets/upload" element={<ConfiguratorAssetUpload />} />
+                  <Route path="/premium" element={<Premium />} />
+                  <Route path="/dealer" element={<Dealer />} />
+                  <Route path="/dealers/apply" element={<DealerApply />} />
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/my-bookings" element={<MyBookings />} />
+                </Routes>
+              </main>
+              <Footer />
+              <ChatDrawer />
+              <InstallPWA />
+              <Toaster />
+            </div>
+          )}
+        </BrowserRouter>
+      </I18nProvider>
     </AppErrorBoundary>
   );
 }
