@@ -16,6 +16,7 @@ import ConfiguratorHistory from "./pages/ConfiguratorHistory";
 import ConfiguratorConversion from "./pages/ConfiguratorConversion";
 import ConfiguratorAssetManager from "./pages/ConfiguratorAssetManager";
 import ConfiguratorAssetUpload from "./pages/ConfiguratorAssetUpload";
+import DemoConfigurator from "./pages/DemoConfigurator";
 import Premium from "./pages/Premium";
 import Dealer from "./pages/Dealer";
 import DealerApply from "./pages/DealerApply";
@@ -45,6 +46,7 @@ function App() {
                 <Route path="/news" element={<News />} />
                 <Route path="/book/:carId" element={<BookCar />} />
                 <Route path="/showroom/:carId" element={<Showroom />} />
+                <Route path="/configurator-demo" element={<DemoConfigurator />} />
                 <Route path="/configurator/:variantId" element={<ConfiguratorExperience />} />
                 <Route path="/configurator/history" element={<ConfiguratorHistory />} />
                 <Route path="/configurator/conversion" element={<ConfiguratorConversion />} />
