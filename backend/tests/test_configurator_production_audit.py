@@ -31,6 +31,9 @@ class _DB:
             )
         }
 
+    def __getitem__(self, item):
+        return self._collections[item]
+
     def __getattr__(self, item):
         return self._collections[item]
 
