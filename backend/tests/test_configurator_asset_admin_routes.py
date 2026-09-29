@@ -3,7 +3,7 @@ import inspect
 from fastapi.params import Header as HeaderParam
 
 from configurator_asset_admin_routes import AssetManifestValidationRequest, _require_admin
-from configurator_schemas import AssetProvenance, ConfiguratorAssetCreate
+from configurator_schemas import AssetEvidence, AssetEvidenceStatus, AssetEvidenceType, AssetProvenance, ConfiguratorAssetCreate
 
 
 def make_asset(**overrides):
@@ -18,6 +18,14 @@ def make_asset(**overrides):
         "provenance": AssetProvenance.AUTO_AI_LICENSED,
         "license_name": "Auto AI licensed asset",
         "publisher": "Auto AI India",
+        "provenance_evidence": [AssetEvidence(
+            evidence_id="evidence-001",
+            evidence_type=AssetEvidenceType.LICENSE_RECORD,
+            status=AssetEvidenceStatus.VERIFIED,
+            reference="LICENSE-001",
+            verified_by="admin@example.invalid",
+            verified_at="2026-09-29T00:00:00Z",
+        )],
         "validation_passed": True,
         "admin_reviewed": True,
     }
@@ -38,6 +46,13 @@ def test_publishable_asset_requires_review_and_validation():
     assert make_asset(validation_passed=False).is_publishable() is False
     assert make_asset(admin_reviewed=False).is_publishable() is False
     assert make_asset(provenance=AssetProvenance.AI_GENERATED_CONCEPT).is_publishable() is False
+    assert make_asset(provenance_evidence=[]).is_publishable() is False
+    assert make_asset(provenance_evidence=[AssetEvidence(
+        evidence_id="evidence-pending",
+        evidence_type=AssetEvidenceType.LICENSE_RECORD,
+        status=AssetEvidenceStatus.PENDING,
+        reference="LICENSE-PENDING",
+    )]).is_publishable() is False
 
 
 def test_admin_dependency_is_header_bound():
