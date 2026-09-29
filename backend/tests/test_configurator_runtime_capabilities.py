@@ -76,6 +76,7 @@ class _DB:
             "publisher": "Auto AI India",
             "checksum_sha256": "a" * 64,
             "file_size_bytes": 1024,
+            "storage_key": "configurator/asset-1/v1.0.0/vehicle.glb",
             "storage_status": "PUBLISHED",
             "cdn_url": "https://cdn.example/vehicle.glb",
             "format": "glb",
