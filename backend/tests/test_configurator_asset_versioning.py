@@ -5,7 +5,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from configurator_asset_versioning import _require_admin, make_asset_version_router, snapshot_asset, snapshot_before_upload
+from configurator_asset_versioning import (
+    _require_admin,
+    create_publication_revision,
+    make_asset_version_router,
+    snapshot_asset,
+    snapshot_before_upload,
+)
 
 
 class FakeCursor:
@@ -141,6 +147,37 @@ async def test_snapshot_before_upload_captures_only_verified_assets():
     unverified = {**verified, "validation_passed": False}
     assert await snapshot_before_upload(db, unverified) is None
     assert len(db.configurator_asset_versions.documents) == 1
+
+
+@pytest.mark.asyncio
+async def test_create_publication_revision_marks_runtime_authority():
+    now = datetime.now(timezone.utc).isoformat()
+    asset = {
+        "asset_id": "asset-1",
+        "variant_id": "variant-1",
+        "version": "2.0.0",
+        "storage_key": "configurator/asset-1/v2.0.0/current.glb",
+        "checksum_sha256": "b" * 64,
+        "file_size_bytes": 200,
+        "validation_passed": True,
+        "admin_reviewed": True,
+        "published": False,
+        "storage_status": "VALIDATED",
+        "created_at": now,
+        "updated_at": now,
+    }
+    db = SimpleNamespace(configurator_asset_versions=FakeCollection())
+
+    revision_id = await create_publication_revision(db, asset)
+
+    assert revision_id.startswith("rev-")
+    revision = db.configurator_asset_versions.documents[0]
+    assert revision["revision_id"] == revision_id
+    assert revision["snapshot_type"] == "PUBLICATION"
+    assert revision["active_revision_id"] == revision_id
+    assert revision["published"] is True
+    assert revision["storage_status"] == "PUBLISHED"
+    assert revision["checksum_sha256"] == asset["checksum_sha256"]
 
 
 def test_rollback_restores_reviewed_revision_and_preserves_current(client):

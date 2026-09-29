@@ -14,6 +14,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, Field, ValidationError
 
 from configurator_asset_ingestion import build_verified_asset_metadata
+from configurator_asset_versioning import create_publication_revision
 from configurator_asset_inspection import inspect_gltf_bytes
 from configurator_asset_storage import (
     AssetStorageConfigError,
@@ -25,7 +26,7 @@ from configurator_asset_storage import (
     public_asset_url,
 )
 from configurator_asset_validation import validate_asset_manifest
-from configurator_schemas import ConfiguratorAssetCreate, ConfiguratorAsset
+from configurator_schemas import AssetEvidence, AssetEvidenceStatus, AssetEvidenceType, ConfiguratorAssetCreate, ConfiguratorAsset
 from vehicle_schemas import ConfiguratorStatus
 
 _MAX_UPLOAD_BYTES = 200 * 1024 * 1024
@@ -40,6 +41,17 @@ class AssetManifestValidationRequest(BaseModel):
 class AssetPublicationRequest(BaseModel):
     asset_id: str = Field(..., max_length=100)
     publish: bool
+
+
+class AssetEvidenceRequest(BaseModel):
+    asset_id: str = Field(..., max_length=100)
+    evidence_id: str = Field(..., min_length=2, max_length=100)
+    evidence_type: AssetEvidenceType
+    status: AssetEvidenceStatus
+    reference: str = Field(..., min_length=2, max_length=500)
+    source_url: Optional[str] = Field(None, max_length=2000)
+    rights_holder: Optional[str] = Field(None, max_length=200)
+    notes: Optional[str] = Field(None, max_length=1000)
 
 
 class AssetReviewRequest(BaseModel):
@@ -327,6 +339,55 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
         )
         return ConfiguratorAsset(**document)
 
+
+    @router.post("/assets/evidence")
+    async def upsert_asset_evidence(
+        request: AssetEvidenceRequest,
+        admin_identity: str = Depends(_require_admin),
+    ):
+        asset_doc = await db.configurator_assets.find_one({"asset_id": request.asset_id}, {"_id": 0})
+        if not asset_doc:
+            raise HTTPException(status_code=404, detail="Asset not found")
+
+        evidence = AssetEvidence(
+            evidence_id=request.evidence_id,
+            evidence_type=request.evidence_type,
+            status=request.status,
+            reference=request.reference,
+            source_url=request.source_url,
+            rights_holder=request.rights_holder,
+            verified_by=admin_identity if request.status == AssetEvidenceStatus.VERIFIED else None,
+            verified_at=datetime.now(timezone.utc).isoformat() if request.status == AssetEvidenceStatus.VERIFIED else None,
+            notes=request.notes,
+        )
+
+        evidence_documents = [
+            item for item in asset_doc.get("provenance_evidence", [])
+            if item.get("evidence_id") != request.evidence_id
+        ]
+        evidence_documents.append(evidence.model_dump(mode="json"))
+
+        now = datetime.now(timezone.utc).isoformat()
+        await db.configurator_assets.update_one(
+            {"asset_id": request.asset_id},
+            {
+                "$set": {
+                    "provenance_evidence": evidence_documents,
+                    "updated_at": now,
+                    "published": False if request.status != AssetEvidenceStatus.VERIFIED else bool(asset_doc.get("published")),
+                }
+            },
+        )
+        publishable_asset = ConfiguratorAssetCreate.model_validate({
+            **asset_doc,
+            "provenance_evidence": evidence_documents,
+        })
+        return {
+            "asset_id": request.asset_id,
+            "evidence": evidence.model_dump(mode="json"),
+            "publishable": publishable_asset.is_publishable(),
+        }
+
     @router.post("/assets/review")
     async def review_asset(
         request: AssetReviewRequest,
@@ -366,11 +427,51 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
         if request.publish:
             if not asset.is_publishable():
                 raise HTTPException(status_code=422, detail="Asset does not satisfy publication gates")
-            update = {"published": True, "updated_at": datetime.now(timezone.utc).isoformat(), "storage_status": "PUBLISHED"}
+            if not asset.storage_key or not asset.checksum_sha256 or not asset.file_size_bytes:
+                raise HTTPException(status_code=422, detail="Asset must have a verified stored binary before publication")
+            if asset.storage_status not in {"VALIDATED", "PUBLISHED"}:
+                raise HTTPException(status_code=422, detail="Asset storage must be validated before publication")
+
+            active_revision_id = asset.active_revision_id
+            active_revision = None
+            if active_revision_id:
+                active_revision = await db.configurator_asset_versions.find_one(
+                    {
+                        "asset_id": asset.asset_id,
+                        "variant_id": asset.variant_id,
+                        "revision_id": active_revision_id,
+                        "version": asset.version,
+                        "checksum_sha256": asset.checksum_sha256,
+                        "file_size_bytes": asset.file_size_bytes,
+                        "storage_key": asset.storage_key,
+                        "published": True,
+                        "validation_passed": True,
+                        "admin_reviewed": True,
+                        "storage_status": "PUBLISHED",
+                    },
+                    {"_id": 0},
+                )
+
+            if active_revision is None:
+                active_revision_id = await create_publication_revision(db, asset_doc)
+
+            update = {
+                "active_revision_id": active_revision_id,
+                "published": True,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "storage_status": "PUBLISHED",
+            }
         else:
-            update = {"published": False, "updated_at": datetime.now(timezone.utc).isoformat()}
+            update = {
+                "published": False,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
         await db.configurator_assets.update_one({"asset_id": request.asset_id}, {"$set": update})
-        return {"asset_id": request.asset_id, "published": request.publish}
+        return {
+            "asset_id": request.asset_id,
+            "published": request.publish,
+            "active_revision_id": update.get("active_revision_id", asset.active_revision_id),
+        }
 
     @router.post("/assets/assign")
     async def assign_asset(

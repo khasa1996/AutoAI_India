@@ -49,6 +49,23 @@ async def snapshot_before_upload(db: AsyncIOMotorDatabase, asset: dict) -> Optio
     return revision_id
 
 
+async def create_publication_revision(db: AsyncIOMotorDatabase, asset: dict) -> str:
+    """Create the immutable revision that becomes the runtime publication authority."""
+    now = datetime.now(timezone.utc).isoformat()
+    revision_id = f"rev-{uuid4().hex}"
+    revision = snapshot_asset(
+        asset,
+        revision_id=revision_id,
+        snapshot_type="PUBLICATION",
+        created_at=now,
+    )
+    revision["published"] = True
+    revision["storage_status"] = "PUBLISHED"
+    revision["active_revision_id"] = revision_id
+    await db.configurator_asset_versions.insert_one(revision)
+    return revision_id
+
+
 def _public_revision(revision: dict) -> dict:
     """Return revision metadata without duplicating the large inspection payload."""
     return {
