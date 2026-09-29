@@ -14,6 +14,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, Field, ValidationError
 
 from configurator_asset_ingestion import build_verified_asset_metadata
+from configurator_asset_versioning import create_publication_revision
 from configurator_asset_inspection import inspect_gltf_bytes
 from configurator_asset_storage import (
     AssetStorageConfigError,
@@ -426,11 +427,51 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
         if request.publish:
             if not asset.is_publishable():
                 raise HTTPException(status_code=422, detail="Asset does not satisfy publication gates")
-            update = {"published": True, "updated_at": datetime.now(timezone.utc).isoformat(), "storage_status": "PUBLISHED"}
+            if not asset.storage_key or not asset.checksum_sha256 or not asset.file_size_bytes:
+                raise HTTPException(status_code=422, detail="Asset must have a verified stored binary before publication")
+            if asset.storage_status not in {"VALIDATED", "PUBLISHED"}:
+                raise HTTPException(status_code=422, detail="Asset storage must be validated before publication")
+
+            active_revision_id = asset.active_revision_id
+            active_revision = None
+            if active_revision_id:
+                active_revision = await db.configurator_asset_versions.find_one(
+                    {
+                        "asset_id": asset.asset_id,
+                        "variant_id": asset.variant_id,
+                        "revision_id": active_revision_id,
+                        "version": asset.version,
+                        "checksum_sha256": asset.checksum_sha256,
+                        "file_size_bytes": asset.file_size_bytes,
+                        "storage_key": asset.storage_key,
+                        "published": True,
+                        "validation_passed": True,
+                        "admin_reviewed": True,
+                        "storage_status": "PUBLISHED",
+                    },
+                    {"_id": 0},
+                )
+
+            if active_revision is None:
+                active_revision_id = await create_publication_revision(db, asset_doc)
+
+            update = {
+                "active_revision_id": active_revision_id,
+                "published": True,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "storage_status": "PUBLISHED",
+            }
         else:
-            update = {"published": False, "updated_at": datetime.now(timezone.utc).isoformat()}
+            update = {
+                "published": False,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
         await db.configurator_assets.update_one({"asset_id": request.asset_id}, {"$set": update})
-        return {"asset_id": request.asset_id, "published": request.publish}
+        return {
+            "asset_id": request.asset_id,
+            "published": request.publish,
+            "active_revision_id": update.get("active_revision_id", asset.active_revision_id),
+        }
 
     @router.post("/assets/assign")
     async def assign_asset(
