@@ -21,8 +21,15 @@ class _Collection:
     async def to_list(self, _limit):
         return self.rows
 
-    async def find_one(self, *_args, **_kwargs):
-        return self.one
+    async def find_one(self, query=None, *_args, **_kwargs):
+        if query is None:
+            return self.one
+        for row in self.rows:
+            if all(row.get(key) == value for key, value in query.items()):
+                return row
+        if self.one is not None and all(self.one.get(key) == value for key, value in query.items()):
+            return self.one
+        return None
 
     def find(self, *_args, **_kwargs):
         return _Cursor(self.rows)
@@ -61,6 +68,7 @@ class _DB:
             "asset_id": "asset-1",
             "variant_id": "demo-variant",
             "version": "1.0.0",
+            "active_revision_id": "rev-1",
             "published": True,
             "validation_passed": True,
             "provenance": "AUTO_AI_LICENSED",
@@ -68,6 +76,7 @@ class _DB:
             "publisher": "Auto AI India",
             "checksum_sha256": "a" * 64,
             "file_size_bytes": 1024,
+            "storage_key": "configurator/asset-1/v1.0.0/vehicle.glb",
             "storage_status": "PUBLISHED",
             "cdn_url": "https://cdn.example/vehicle.glb",
             "format": "glb",
@@ -84,6 +93,19 @@ class _DB:
                 "sunroof": {"open": "SunroofOpen", "close": "SunroofClose"},
             },
         })
+        self.configurator_asset_versions = _Collection(rows=[{
+            "asset_id": "asset-1",
+            "revision_id": "rev-1",
+            "variant_id": "demo-variant",
+            "version": "1.0.0",
+            "published": True,
+            "validation_passed": True,
+            "admin_reviewed": True,
+            "storage_status": "PUBLISHED",
+            "checksum_sha256": "a" * 64,
+            "file_size_bytes": 1024,
+            "storage_key": "configurator/asset-1/v1.0.0/vehicle.glb",
+        }])
 
 
 def _app(db):
@@ -127,6 +149,36 @@ async def test_runtime_capabilities_blocks_unready_variant_without_exposing_runt
     assert payload["ready"] is False
     assert payload["asset"] is None
     assert "configurator asset storage publication state is not complete" in payload["blockers"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_capabilities_requires_matching_active_revision():
+    db = _DB()
+    db.configurator_asset_versions.rows = []
+
+    async with AsyncClient(transport=ASGITransport(app=_app(db)), base_url="http://test") as client:
+        response = await client.get("/api/v1/configurator/demo-variant/capabilities")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ready"] is False
+    assert payload["asset"] is None
+    assert "active configurator asset revision is missing or invalid" in payload["blockers"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_capabilities_rejects_revision_identity_mismatch():
+    db = _DB()
+    db.configurator_asset_versions.rows[0]["asset_id"] = "different-asset"
+
+    async with AsyncClient(transport=ASGITransport(app=_app(db)), base_url="http://test") as client:
+        response = await client.get("/api/v1/configurator/demo-variant/capabilities")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ready"] is False
+    assert payload["asset"] is None
+    assert "active configurator asset revision is missing or invalid" in payload["blockers"]
 
 
 @pytest.mark.asyncio
