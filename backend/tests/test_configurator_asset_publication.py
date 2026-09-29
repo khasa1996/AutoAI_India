@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from configurator_asset_admin_routes import _require_admin, make_asset_admin_router
-from configurator_schemas import AssetEvidenceStatus, AssetEvidenceType, AssetProvenance
+from configurator_schemas import AssetEvidenceStatus, AssetEvidenceType
 
 
 class Collection:
@@ -103,6 +103,26 @@ def test_publish_creates_and_selects_immutable_revision():
     assert revision["published"] is True
     assert revision["storage_status"] == "PUBLISHED"
     assert db.configurator_assets.documents[0]["active_revision_id"] == payload["active_revision_id"]
+
+
+def test_republishing_matching_active_revision_is_idempotent():
+    client, db = make_client()
+
+    first = client.post(
+        "/api/v1/admin/configurator/assets/publish",
+        json={"asset_id": "asset-1", "publish": True},
+    )
+    assert first.status_code == 200
+    first_revision_id = first.json()["active_revision_id"]
+
+    second = client.post(
+        "/api/v1/admin/configurator/assets/publish",
+        json={"asset_id": "asset-1", "publish": True},
+    )
+
+    assert second.status_code == 200
+    assert second.json()["active_revision_id"] == first_revision_id
+    assert len(db.configurator_asset_versions.documents) == 1
 
 
 def test_publish_rejects_asset_without_verified_binary():
