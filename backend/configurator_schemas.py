@@ -38,6 +38,51 @@ _VALID_ASSET_EXTENSIONS = (".glb", ".gltf")
 _MAX_ASSET_BYTES = 200 * 1024 * 1024
 
 
+class AssetEvidenceType(str, Enum):
+    """Evidence category supporting production asset rights and provenance."""
+    OEM_AUTHORIZATION = "OEM_AUTHORIZATION"
+    LICENSE_AGREEMENT = "LICENSE_AGREEMENT"
+    LICENSE_RECORD = "LICENSE_RECORD"
+    PROVENANCE_RECORD = "PROVENANCE_RECORD"
+    RIGHTS_DECLARATION = "RIGHTS_DECLARATION"
+
+
+class AssetEvidenceStatus(str, Enum):
+    """Verification state of an asset evidence record."""
+    VERIFIED = "VERIFIED"
+    PENDING = "PENDING"
+    REJECTED = "REJECTED"
+
+
+class AssetEvidence(BaseModel):
+    """Auditable evidence supporting the declared asset provenance."""
+    evidence_id: str = Field(..., min_length=2, max_length=100)
+    evidence_type: AssetEvidenceType
+    status: AssetEvidenceStatus = AssetEvidenceStatus.PENDING
+    reference: str = Field(..., min_length=2, max_length=500)
+    source_url: Optional[str] = Field(None, max_length=2000)
+    rights_holder: Optional[str] = Field(None, max_length=200)
+    verified_by: Optional[str] = Field(None, max_length=200)
+    verified_at: Optional[str] = Field(None, max_length=80)
+    notes: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator("source_url")
+    @classmethod
+    def evidence_url_must_be_https(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not v.startswith("https://"):
+            raise ValueError("Evidence source_url must use HTTPS")
+        return v
+
+    def is_verified(self) -> bool:
+        """Return True only when evidence has an auditable verification identity."""
+        return (
+            self.status == AssetEvidenceStatus.VERIFIED
+            and bool(self.reference.strip())
+            and bool(self.verified_by)
+            and bool(self.verified_at)
+        )
+
+
 class AssetLODLevel(str, Enum):
     """Level of detail tier."""
     LOD0 = "LOD0"
@@ -64,6 +109,7 @@ class ConfiguratorAssetCreate(BaseModel):
     version: str = Field(..., min_length=1, max_length=30)
     lod_level: AssetLODLevel = AssetLODLevel.LOD0
     provenance: AssetProvenance = AssetProvenance.UNKNOWN
+    provenance_evidence: List[AssetEvidence] = Field(default_factory=list, max_length=20)
     license_name: Optional[str] = Field(None, max_length=200)
     license_url: Optional[str] = Field(None, max_length=500)
     publisher: Optional[str] = Field(None, max_length=200)
@@ -116,6 +162,7 @@ class ConfiguratorAssetCreate(BaseModel):
             and self.admin_reviewed
             and bool(self.license_name)
             and bool(self.publisher)
+            and any(evidence.is_verified() for evidence in self.provenance_evidence)
         )
 
 
