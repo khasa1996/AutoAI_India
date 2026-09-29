@@ -13,6 +13,7 @@ def _asset_runtime_contract(asset: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "asset_id": asset["asset_id"],
         "version": asset["version"],
+        "active_revision_id": asset["active_revision_id"],
         "url": asset.get("cdn_url") or asset["url"],
         "format": asset["format"],
         "lod_level": asset["lod_level"],
@@ -38,6 +39,33 @@ def _capability_contract(asset: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+async def _resolve_active_published_revision(
+    db: Any,
+    asset: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Resolve the exact published revision selected by the asset runtime pointer."""
+    revision_id = asset.get("active_revision_id")
+    if not revision_id:
+        return None
+
+    return await db.configurator_asset_versions.find_one(
+        {
+            "asset_id": asset.get("asset_id"),
+            "variant_id": asset.get("variant_id"),
+            "revision_id": revision_id,
+            "version": asset.get("version"),
+            "checksum_sha256": asset.get("checksum_sha256"),
+            "file_size_bytes": asset.get("file_size_bytes"),
+            "storage_key": asset.get("storage_key"),
+            "published": True,
+            "validation_passed": True,
+            "admin_reviewed": True,
+            "storage_status": "PUBLISHED",
+        },
+        {"_id": 0},
+    )
+
+
 async def build_runtime_capability_contract(
     db: Any,
     variant_id: str,
@@ -61,6 +89,7 @@ async def build_runtime_capability_contract(
     ).to_list(100)
 
     asset = None
+    active_revision = None
     asset_id = vehicle.get("configurator_asset_id")
     if asset_id:
         asset = await db.configurator_assets.find_one(
@@ -72,6 +101,8 @@ async def build_runtime_capability_contract(
             },
             {"_id": 0},
         )
+        if asset is not None:
+            active_revision = await _resolve_active_published_revision(db, asset)
 
     readiness = assess_vehicle_configurator_readiness(
         vehicle,
@@ -81,6 +112,12 @@ async def build_runtime_capability_contract(
         interiors,
         asset,
     )
+
+    if asset is not None and active_revision is None:
+        readiness["blockers"].append(
+            "active configurator asset revision is missing or invalid"
+        )
+        readiness["ready"] = False
 
     if not readiness["ready"] or asset is None:
         return {
