@@ -101,7 +101,7 @@ def test_inspection_rejects_mesh_primitive_accessor_reference_out_of_range():
     payload = make_glb({
         "asset": {"version": "2.0"},
         "meshes": [{"name": "Body", "primitives": [{"attributes": {"POSITION": 2}}]}],
-        "accessors": [{}],
+        "accessors": [{"count": 1, "componentType": 5126, "type": "VEC3"}],
     })
     with pytest.raises(ValueError, match="mesh primitive POSITION accessor index"):
         inspect_gltf_bytes(payload, filename="car.glb")
