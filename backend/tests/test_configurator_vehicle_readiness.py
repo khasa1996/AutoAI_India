@@ -32,6 +32,14 @@ def _asset():
         "provenance": "AUTO_AI_LICENSED",
         "license_name": "Production license",
         "publisher": "Auto AI India",
+        "provenance_evidence": [{
+            "evidence_id": "evidence-001",
+            "evidence_type": "LICENSE_RECORD",
+            "status": "VERIFIED",
+            "reference": "LICENSE-001",
+            "verified_by": "admin@example.invalid",
+            "verified_at": "2026-09-29T00:00:00Z",
+        }],
         "checksum_sha256": "a" * 64,
         "file_size_bytes": 1024,
         "storage_status": "PUBLISHED",
@@ -119,3 +127,28 @@ def test_asset_storage_publication_state_is_required():
     )
     assert result["ready"] is False
     assert "configurator asset storage publication state is not complete" in result["blockers"]
+
+
+def test_missing_provenance_evidence_blocks_production_readiness():
+    colors, wheels, interiors = _options()
+    asset = {**_asset(), "provenance_evidence": []}
+    result = assess_vehicle_configurator_readiness(
+        _vehicle(), _pricing(), colors, wheels, interiors, asset
+    )
+    assert result["ready"] is False
+    assert "configurator asset provenance evidence is missing" in result["blockers"]
+
+
+def test_pending_or_incomplete_provenance_evidence_blocks_production_readiness():
+    colors, wheels, interiors = _options()
+    asset = {**_asset(), "provenance_evidence": [{
+        "evidence_id": "evidence-pending",
+        "evidence_type": "LICENSE_RECORD",
+        "status": "PENDING",
+        "reference": "LICENSE-PENDING",
+    }]}
+    result = assess_vehicle_configurator_readiness(
+        _vehicle(), _pricing(), colors, wheels, interiors, asset
+    )
+    assert result["ready"] is False
+    assert "configurator asset provenance evidence is not fully verified" in result["blockers"]
