@@ -51,7 +51,6 @@ def _read_glb_json(payload: bytes) -> Dict[str, Any]:
     raise ValueError("GLB does not contain a JSON chunk")
 
 
-
 def _require_index(value: Any, limit: int, label: str) -> None:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0 or value >= limit:
         raise ValueError(f"{label} index is out of range")
@@ -64,6 +63,7 @@ def _validate_structural_references(document: Dict[str, Any]) -> None:
     accessors = document.get("accessors", [])
     animations = document.get("animations", [])
     scenes = document.get("scenes", [])
+    skins = document.get("skins", [])
 
     for node_index, node in enumerate(nodes):
         if not isinstance(node, dict):
@@ -72,11 +72,40 @@ def _validate_structural_references(document: Dict[str, Any]) -> None:
             _require_index(node["mesh"], len(meshes), "node mesh")
         if "camera" in node:
             _require_index(node["camera"], len(cameras), "node camera")
+        if "skin" in node:
+            _require_index(node["skin"], len(skins), "node skin")
         children = node.get("children", [])
         if not isinstance(children, list):
             raise ValueError(f"GLTF node {node_index} children must be an array")
         for child in children:
             _require_index(child, len(nodes), "node child")
+
+    for mesh_index, mesh in enumerate(meshes):
+        if not isinstance(mesh, dict):
+            raise ValueError(f"GLTF mesh {mesh_index} must be an object")
+        primitives = mesh.get("primitives", [])
+        if not isinstance(primitives, list) or not primitives:
+            raise ValueError(f"GLTF mesh {mesh_index} primitives must be a non-empty array")
+        for primitive_index, primitive in enumerate(primitives):
+            if not isinstance(primitive, dict):
+                raise ValueError(f"GLTF mesh primitive {mesh_index}:{primitive_index} must be an object")
+            attributes = primitive.get("attributes", {})
+            if not isinstance(attributes, dict):
+                raise ValueError(f"GLTF mesh primitive {mesh_index}:{primitive_index} attributes must be an object")
+            for attribute, accessor in attributes.items():
+                _require_index(accessor, len(accessors), f"mesh primitive {attribute} accessor")
+            for field in ("indices", "material"):
+                if field in primitive:
+                    limit = len(accessors) if field == "indices" else len(document.get("materials", []))
+                    _require_index(primitive[field], limit, f"mesh primitive {field}")
+            targets = primitive.get("targets", [])
+            if not isinstance(targets, list):
+                raise ValueError(f"GLTF mesh primitive {mesh_index}:{primitive_index} targets must be an array")
+            for target_index, target in enumerate(targets):
+                if not isinstance(target, dict):
+                    raise ValueError(f"GLTF mesh primitive target {mesh_index}:{primitive_index}:{target_index} must be an object")
+                for attribute, accessor in target.items():
+                    _require_index(accessor, len(accessors), f"mesh primitive target {attribute} accessor")
 
     for scene_index, scene in enumerate(scenes):
         if not isinstance(scene, dict):
@@ -86,6 +115,22 @@ def _validate_structural_references(document: Dict[str, Any]) -> None:
             raise ValueError(f"GLTF scene {scene_index} nodes must be an array")
         for node in scene_nodes:
             _require_index(node, len(nodes), "scene node")
+
+    if "scene" in document:
+        _require_index(document["scene"], len(scenes), "default scene")
+
+    for skin_index, skin in enumerate(skins):
+        if not isinstance(skin, dict):
+            raise ValueError(f"GLTF skin {skin_index} must be an object")
+        joints = skin.get("joints")
+        if not isinstance(joints, list) or not joints:
+            raise ValueError(f"GLTF skin {skin_index} joints must be a non-empty array")
+        for joint in joints:
+            _require_index(joint, len(nodes), "skin joint")
+        for field in ("skeleton", "inverseBindMatrices"):
+            if field in skin:
+                limit = len(nodes) if field == "skeleton" else len(accessors)
+                _require_index(skin[field], limit, f"skin {field}")
 
     for animation_index, animation in enumerate(animations):
         if not isinstance(animation, dict):
