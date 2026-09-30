@@ -11,7 +11,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from configurator_asset_ingestion import build_verified_asset_metadata
 from configurator_asset_versioning import create_publication_revision
@@ -53,6 +53,13 @@ class AssetEvidenceRequest(BaseModel):
     source_url: Optional[str] = Field(None, max_length=2000)
     rights_holder: Optional[str] = Field(None, max_length=200)
     notes: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator("source_url")
+    @classmethod
+    def source_url_must_be_https(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and not value.startswith("https://"):
+            raise ValueError("Evidence source_url must use HTTPS")
+        return value
 
 
 class AssetReviewRequest(BaseModel):
@@ -408,6 +415,16 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
             if item.get("evidence_id") != request.evidence_id
         ]
         evidence_documents.append(evidence.model_dump(mode="json"))
+        if len(evidence_documents) > 20:
+            raise HTTPException(
+                status_code=422,
+                detail="An asset may contain at most 20 provenance evidence records",
+            )
+
+        ConfiguratorAssetCreate.model_validate({
+            **asset_doc,
+            "provenance_evidence": evidence_documents,
+        })
 
         now = datetime.now(timezone.utc).isoformat()
         await db.configurator_assets.update_one(
