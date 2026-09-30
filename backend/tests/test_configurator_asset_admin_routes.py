@@ -2,7 +2,11 @@ import inspect
 
 from fastapi.params import Header as HeaderParam
 
-from configurator_asset_admin_routes import AssetManifestValidationRequest, _require_admin
+from configurator_asset_admin_routes import (
+    AssetManifestValidationRequest,
+    _require_admin,
+    validate_inspected_asset_manifest,
+)
 from configurator_schemas import AssetProvenance, ConfiguratorAssetCreate
 
 
@@ -43,3 +47,25 @@ def test_publishable_asset_requires_review_and_validation():
 def test_admin_dependency_is_header_bound():
     parameter = inspect.signature(_require_admin).parameters["authorization"]
     assert isinstance(parameter.default, HeaderParam)
+
+
+def test_finalize_manifest_cross_checks_inspected_cameras_and_animations():
+    asset = make_asset(
+        camera_preset_names=["studio-front"],
+        interaction_animation_names={"doors": {"front_left": "Door_FL_Open"}},
+    )
+
+    result = validate_inspected_asset_manifest(
+        asset,
+        {
+            "mesh_names": ["body", "wheel-a", "roof-a"],
+            "node_names": [],
+            "material_names": [],
+            "camera_names": [],
+            "animation_names": [],
+        },
+    )
+
+    assert result["valid"] is False
+    assert any("camera preset" in error.lower() for error in result["errors"])
+    assert any("animation mapping" in error.lower() for error in result["errors"])
