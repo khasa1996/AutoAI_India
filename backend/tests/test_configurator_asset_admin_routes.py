@@ -125,3 +125,24 @@ async def test_asset_onboarding_preflight_reports_readiness_blockers():
     assert "configurator asset provenance evidence is missing" in result["blockers"]
     assert "configurator asset is not published" in result["blockers"]
 
+
+
+def test_provenance_evidence_rejects_invalid_audit_fields():
+    invalid_verifier = AssetEvidence(
+        evidence_id="evidence-invalid-verifier",
+        evidence_type=AssetEvidenceType.LICENSE_RECORD,
+        status=AssetEvidenceStatus.VERIFIED,
+        reference="LICENSE-INVALID",
+        verified_by="   ",
+        verified_at="2026-09-29T00:00:00Z",
+    )
+    invalid_timestamp = AssetEvidence(
+        evidence_id="evidence-invalid-time",
+        evidence_type=AssetEvidenceType.LICENSE_RECORD,
+        status=AssetEvidenceStatus.VERIFIED,
+        reference="LICENSE-INVALID-TIME",
+        verified_by="admin@example.invalid",
+        verified_at="not-a-timestamp",
+    )
+    assert invalid_verifier.is_verified() is False
+    assert invalid_timestamp.is_verified() is False
