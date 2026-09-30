@@ -367,6 +367,11 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
             raise HTTPException(status_code=404, detail="Variant not found")
         if variant.get("model_id") != asset.model_id or variant.get("brand_id") != asset.brand_id:
             raise HTTPException(status_code=422, detail="Asset model_id/brand_id does not match the variant")
+        if any(evidence.status == AssetEvidenceStatus.VERIFIED for evidence in asset.provenance_evidence):
+            raise HTTPException(
+                status_code=422,
+                detail="Verified provenance evidence must be recorded through the dedicated evidence endpoint",
+            )
 
         now = datetime.now(timezone.utc).isoformat()
         existing = await db.configurator_assets.find_one({"asset_id": asset.asset_id}, {"_id": 0})
