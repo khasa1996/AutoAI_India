@@ -19,6 +19,7 @@ from configurator_schemas import (
     ValidationResult,
 )
 from configurator_ai import build_interaction_state, resolve_ai_selection
+from configurator_runtime_capabilities import build_runtime_capability_contract
 from configurator_persistence import revalidate_saved_configuration
 from vehicle_schemas import BrandSummary, ConfiguratorStatus, ModelSummary, VariantDetail, VariantSummary
 from pricing_engine import calculate_configuration_price, validate_asset_url
@@ -209,39 +210,19 @@ def make_configurator_router(
         asset_id = variant.get("configurator_asset_id")
         if not asset_id:
             return {"variant_id": variant_id, "available": False, "message": "3D asset not assigned"}
-        asset = await db.configurator_assets.find_one(
-            {
-                "asset_id": asset_id,
-                "variant_id": variant_id,
-                "published": True,
-                "validation_passed": True,
-            },
-            {"_id": 0},
-        )
-        if not asset:
+        contract = await build_runtime_capability_contract(db, variant_id)
+        if not contract["ready"] or not contract.get("asset"):
             return {
                 "variant_id": variant_id,
                 "available": False,
-                "message": "3D asset is not yet published or has not passed validation",
+                "message": "3D asset is not yet published, verified, or runtime-ready",
+                "blockers": contract["blockers"],
             }
         return {
             "variant_id": variant_id,
             "available": True,
-            "asset": {
-                "asset_id": asset["asset_id"],
-                "url": asset.get("cdn_url") or asset["url"],
-                "format": asset["format"],
-                "version": asset["version"],
-                "lod_level": asset["lod_level"],
-                "supported_interactions": asset.get("supported_interactions", []),
-                "paint_material_names": asset.get("paint_material_names", []),
-                "interior_material_names": asset.get("interior_material_names", []),
-                "interior_material_mappings": asset.get("interior_material_mappings", {}),
-                "wheel_mesh_names": asset.get("wheel_mesh_names", {}),
-                "option_mesh_names": asset.get("option_mesh_names", {}),
-                "camera_preset_names": asset.get("camera_preset_names", []),
-                "interaction_animation_names": asset.get("interaction_animation_names", {}),
-            },
+            "asset": contract["asset"],
+            "capabilities": contract["capabilities"],
         }
 
     @router.get("/configurator/{variant_id}/options")
