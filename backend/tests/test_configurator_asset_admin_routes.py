@@ -5,7 +5,7 @@ import pytest
 
 from fastapi.params import Header as HeaderParam
 
-from configurator_asset_admin_routes import AssetManifestValidationRequest, _require_admin, build_asset_onboarding_preflight
+from configurator_asset_admin_routes import (\n    AssetManifestValidationRequest,\n    _require_admin,\n    build_asset_onboarding_preflight,\n    validate_inspected_asset_manifest,\n)
 from configurator_schemas import AssetEvidence, AssetEvidenceStatus, AssetEvidenceType, AssetProvenance, ConfiguratorAssetCreate
 
 
@@ -146,3 +146,4 @@ def test_provenance_evidence_rejects_invalid_audit_fields():
     )
     assert invalid_verifier.is_verified() is False
     assert invalid_timestamp.is_verified() is False
+\n\ndef test_finalize_manifest_cross_checks_inspected_cameras_and_animations():\n    asset = make_asset(\n        camera_preset_names=["studio-front"],\n        interaction_animation_names={"doors": {"front_left": "Door_FL_Open"}},\n    )\n\n    result = validate_inspected_asset_manifest(\n        asset,\n        {\n            "mesh_names": ["Body", "Wheel_FL"],\n            "node_names": [],\n            "material_names": [],\n            "camera_names": [],\n            "animation_names": [],\n        },\n    )\n\n    assert result["valid"] is False\n    assert any("camera preset" in error.lower() for error in result["errors"])\n    assert any("animation mapping" in error.lower() for error in result["errors"])\n
