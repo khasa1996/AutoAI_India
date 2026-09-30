@@ -95,6 +95,13 @@ def client():
         "admin_reviewed": True,
         "published": True,
         "storage_status": "PUBLISHED",
+        "provenance_evidence": [{
+            "evidence_id": "evidence-001",
+            "status": "VERIFIED",
+            "reference": "LICENSE-001",
+            "verified_by": "admin",
+            "verified_at": now,
+        }],
         "review_notes": "approved",
         "revision_created_at": now,
     }
@@ -198,6 +205,17 @@ def test_rollback_restores_reviewed_revision_and_preserves_current(client):
 def test_rollback_rejects_unreviewed_revision(client):
     test_client, db = client
     db.configurator_asset_versions.documents[0]["admin_reviewed"] = False
+    response = test_client.post(
+        "/api/v1/admin/configurator/assets/asset-1/rollback",
+        json={"revision_id": "rev-12345678"},
+    )
+    assert response.status_code == 422
+    assert db.configurator_assets.document["version"] == "2.0.0"
+
+
+def test_rollback_rejects_unpublished_revision(client):
+    test_client, db = client
+    db.configurator_asset_versions.documents[0]["published"] = False
     response = test_client.post(
         "/api/v1/admin/configurator/assets/asset-1/rollback",
         json={"revision_id": "rev-12345678"},
