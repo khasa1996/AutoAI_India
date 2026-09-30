@@ -62,3 +62,32 @@ def test_inspection_rejects_json_with_duplicate_named_meshes():
 
     with pytest.raises(ValueError, match="duplicate mesh"):
         inspect_gltf_bytes(payload, filename="car.glb")
+
+
+def test_inspection_rejects_node_mesh_reference_out_of_range():
+    payload = make_glb({"asset": {"version": "2.0"}, "nodes": [{"name": "Body", "mesh": 2}], "meshes": [{"name": "BodyMesh"}]})
+    with pytest.raises(ValueError, match="node mesh index"):
+        inspect_gltf_bytes(payload, filename="car.glb")
+
+
+def test_inspection_rejects_node_camera_reference_out_of_range():
+    payload = make_glb({"asset": {"version": "2.0"}, "nodes": [{"name": "Camera", "camera": 1}], "cameras": [{"name": "Exterior"}]})
+    with pytest.raises(ValueError, match="node camera index"):
+        inspect_gltf_bytes(payload, filename="car.glb")
+
+
+def test_inspection_rejects_node_child_reference_out_of_range():
+    payload = make_glb({"asset": {"version": "2.0"}, "nodes": [{"name": "Body", "children": [1]}]})
+    with pytest.raises(ValueError, match="node child index"):
+        inspect_gltf_bytes(payload, filename="car.glb")
+
+
+def test_inspection_rejects_animation_channel_node_reference_out_of_range():
+    payload = make_glb({
+        "asset": {"version": "2.0"},
+        "nodes": [{"name": "Body"}],
+        "animations": [{"name": "OpenDoor", "samplers": [{"input": 0, "output": 1}], "channels": [{"sampler": 0, "target": {"node": 2, "path": "rotation"}}]}],
+        "accessors": [{}, {}],
+    })
+    with pytest.raises(ValueError, match="animation channel target node index"):
+        inspect_gltf_bytes(payload, filename="car.glb")
