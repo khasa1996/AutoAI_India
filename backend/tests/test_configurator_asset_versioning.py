@@ -213,6 +213,30 @@ def test_rollback_rejects_unreviewed_revision(client):
     assert db.configurator_assets.document["version"] == "2.0.0"
 
 
+def test_rollback_rejects_revision_without_verified_provenance(client):
+    test_client, db = client
+    db.configurator_asset_versions.documents[0].pop("provenance_evidence")
+    response = test_client.post(
+        "/api/v1/admin/configurator/assets/asset-1/rollback",
+        json={"revision_id": "rev-12345678"},
+    )
+    assert response.status_code == 422
+    assert "verified provenance evidence" in response.json()["detail"]
+    assert db.configurator_assets.document["version"] == "2.0.0"
+
+
+def test_rollback_rejects_incomplete_provenance(client):
+    test_client, db = client
+    db.configurator_asset_versions.documents[0]["provenance_evidence"][0]["verified_at"] = ""
+    response = test_client.post(
+        "/api/v1/admin/configurator/assets/asset-1/rollback",
+        json={"revision_id": "rev-12345678"},
+    )
+    assert response.status_code == 422
+    assert "verified provenance evidence" in response.json()["detail"]
+    assert db.configurator_assets.document["version"] == "2.0.0"
+
+
 def test_rollback_rejects_unpublished_revision(client):
     test_client, db = client
     db.configurator_asset_versions.documents[0]["published"] = False
