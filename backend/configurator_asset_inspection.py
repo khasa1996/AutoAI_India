@@ -56,6 +56,11 @@ def _require_index(value: Any, limit: int, label: str) -> None:
         raise ValueError(f"{label} index is out of range")
 
 
+def _require_non_negative_integer(value: Any, label: str) -> None:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+
+
 def _validate_structural_references(document: Dict[str, Any]) -> None:
     nodes = document.get("nodes", [])
     meshes = document.get("meshes", [])
@@ -64,6 +69,76 @@ def _validate_structural_references(document: Dict[str, Any]) -> None:
     animations = document.get("animations", [])
     scenes = document.get("scenes", [])
     skins = document.get("skins", [])
+    buffer_views = document.get("bufferViews", [])
+    buffers = document.get("buffers", [])
+
+    for collection, kind in (
+        (buffer_views, "bufferViews"),
+        (buffers, "buffers"),
+    ):
+        if not isinstance(collection, list):
+            raise ValueError(f"GLTF {kind} must be an array")
+
+    for buffer_view_index, buffer_view in enumerate(buffer_views):
+        if not isinstance(buffer_view, dict):
+            raise ValueError(f"GLTF bufferView {buffer_view_index} must be an object")
+        if "buffer" not in buffer_view:
+            raise ValueError(f"GLTF bufferView {buffer_view_index} buffer is required")
+        _require_index(buffer_view["buffer"], len(buffers), "bufferView buffer")
+        if "byteOffset" in buffer_view:
+            _require_non_negative_integer(buffer_view["byteOffset"], "bufferView byteOffset")
+        if "byteLength" not in buffer_view:
+            raise ValueError(f"GLTF bufferView {buffer_view_index} byteLength is required")
+        _require_non_negative_integer(buffer_view["byteLength"], "bufferView byteLength")
+        if "byteStride" in buffer_view:
+            stride = buffer_view["byteStride"]
+            if not isinstance(stride, int) or isinstance(stride, bool) or stride < 4 or stride > 252 or stride % 4:
+                raise ValueError("bufferView byteStride is invalid")
+
+    for buffer_index, buffer in enumerate(buffers):
+        if not isinstance(buffer, dict):
+            raise ValueError(f"GLTF buffer {buffer_index} must be an object")
+        if "byteLength" not in buffer:
+            raise ValueError(f"GLTF buffer {buffer_index} byteLength is required")
+        _require_non_negative_integer(buffer["byteLength"], "buffer byteLength")
+
+    for accessor_index, accessor in enumerate(accessors):
+        if not isinstance(accessor, dict):
+            raise ValueError(f"GLTF accessor {accessor_index} must be an object")
+        if "bufferView" in accessor:
+            _require_index(accessor["bufferView"], len(buffer_views), "accessor bufferView")
+        if "byteOffset" in accessor:
+            _require_non_negative_integer(accessor["byteOffset"], "accessor byteOffset")
+        if "count" not in accessor:
+            raise ValueError(f"GLTF accessor {accessor_index} count is required")
+        _require_non_negative_integer(accessor["count"], "accessor count")
+        if "componentType" in accessor:
+            if accessor["componentType"] not in {5120, 5121, 5122, 5123, 5125, 5126}:
+                raise ValueError("accessor componentType is invalid")
+        if "type" in accessor:
+            if accessor["type"] not in {"SCALAR", "VEC2", "VEC3", "VEC4", "MAT2", "MAT3", "MAT4"}:
+                raise ValueError("accessor type is invalid")
+        sparse = accessor.get("sparse")
+        if sparse is not None:
+            if not isinstance(sparse, dict):
+                raise ValueError(f"GLTF accessor {accessor_index} sparse must be an object")
+            if "count" not in sparse:
+                raise ValueError(f"GLTF accessor {accessor_index} sparse count is required")
+            _require_non_negative_integer(sparse["count"], "accessor sparse count")
+            indices = sparse.get("indices")
+            values = sparse.get("values")
+            if not isinstance(indices, dict) or not isinstance(values, dict):
+                raise ValueError(f"GLTF accessor {accessor_index} sparse indices and values are required")
+            if "bufferView" not in indices or "bufferView" not in values:
+                raise ValueError(f"GLTF accessor {accessor_index} sparse bufferView is required")
+            _require_index(indices["bufferView"], len(buffer_views), "sparse indices bufferView")
+            _require_index(values["bufferView"], len(buffer_views), "sparse values bufferView")
+            if "byteOffset" in indices:
+                _require_non_negative_integer(indices["byteOffset"], "sparse indices byteOffset")
+            if "byteOffset" in values:
+                _require_non_negative_integer(values["byteOffset"], "sparse values byteOffset")
+            if "componentType" not in indices or indices["componentType"] not in {5121, 5123, 5125}:
+                raise ValueError("sparse indices componentType is invalid")
 
     for node_index, node in enumerate(nodes):
         if not isinstance(node, dict):
