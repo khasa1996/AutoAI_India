@@ -83,3 +83,35 @@ def test_manifest_rejects_animation_mapping_for_unsupported_interaction():
     result = validate_asset_manifest(asset, ["wheel-a", "roof-a"])
     assert result["valid"] is False
     assert any("animation mapping" in error.lower() for error in result["errors"])
+
+
+def test_manifest_rejects_mixed_verified_and_pending_evidence():
+    pending = AssetEvidence(
+        evidence_id="evidence-002",
+        evidence_type=AssetEvidenceType.LICENSE_RECORD,
+        status=AssetEvidenceStatus.PENDING,
+        reference="LICENSE-002",
+    )
+    result = validate_asset_manifest(
+        make_asset(provenance_evidence=[make_asset().provenance_evidence[0], pending]),
+        ["body", "wheel-a", "roof-a"],
+    )
+    assert result["valid"] is False
+    assert any("not publishable" in error.lower() for error in result["errors"])
+
+
+def test_manifest_accepts_all_verified_evidence():
+    second = AssetEvidence(
+        evidence_id="evidence-002",
+        evidence_type=AssetEvidenceType.OEM_AUTHORIZATION,
+        status=AssetEvidenceStatus.VERIFIED,
+        reference="OEM-002",
+        verified_by="admin@example.invalid",
+        verified_at="2026-09-29T00:00:00Z",
+    )
+    result = validate_asset_manifest(
+        make_asset(provenance_evidence=[make_asset().provenance_evidence[0], second]),
+        ["body", "wheel-a", "roof-a"],
+    )
+    assert result["valid"] is True
+    assert result["errors"] == []
