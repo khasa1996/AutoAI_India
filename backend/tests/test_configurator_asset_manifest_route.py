@@ -28,7 +28,10 @@ class FakeCollection:
         projection: Optional[Dict[str, int]] = None,
     ) -> Optional[Dict[str, Any]]:
         self.queries.append(query)
-        for document in self.documents:\n            if document is not None:\n                return document\n        return None
+        for document in self.documents:
+            if document is not None:
+                return document
+        return None
 
     def find(
         self,
