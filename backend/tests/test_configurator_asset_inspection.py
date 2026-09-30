@@ -57,7 +57,10 @@ def test_inspection_rejects_json_with_duplicate_named_meshes():
     payload = make_glb(
         {
             "asset": {"version": "2.0"},
-            "meshes": [{"name": "Body"}, {"name": "Body"}],
+            "meshes": [
+                {"name": "Body", "primitives": [{"attributes": {}}]},
+                {"name": "Body", "primitives": [{"attributes": {}}]},
+            ],
         }
     )
 
