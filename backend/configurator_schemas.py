@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -49,12 +50,17 @@ class AssetEvidence(BaseModel):
         return v
 
     def is_verified(self) -> bool:
-        return (
-            self.status == AssetEvidenceStatus.VERIFIED
-            and bool(self.reference.strip())
-            and bool(self.verified_by)
-            and bool(self.verified_at)
-        )
+        if self.status != AssetEvidenceStatus.VERIFIED:
+            return False
+        if not self.reference.strip() or not self.verified_by or not self.verified_by.strip():
+            return False
+        if not self.verified_at or not self.verified_at.strip():
+            return False
+        try:
+            datetime.fromisoformat(self.verified_at.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        return True
 
 class AssetLODLevel(str, Enum):
     LOD0 = "LOD0"
