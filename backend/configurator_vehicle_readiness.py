@@ -85,6 +85,19 @@ def assess_vehicle_configurator_readiness(
         if asset.get("provenance") not in _PUBLISHABLE_PROVENANCE:
             blockers.append("configurator asset provenance is not publishable")
 
+        evidence = asset.get("provenance_evidence") or []
+        if not evidence:
+            blockers.append("configurator asset provenance evidence is missing")
+        elif any(
+            item.get("status") != "VERIFIED"
+            or not str(item.get("reference", "")).strip()
+            or not str(item.get("verified_by", "")).strip()
+            or not str(item.get("verified_at", "")).strip()
+            for item in evidence
+            if isinstance(item, dict)
+        ) or any(not isinstance(item, dict) for item in evidence):
+            blockers.append("configurator asset provenance evidence is not fully verified")
+
         if not asset.get("license_name") or not asset.get("publisher"):
             blockers.append("configurator asset license metadata is incomplete")
 
