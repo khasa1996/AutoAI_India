@@ -24,7 +24,7 @@ def test_inspection_extracts_mesh_material_animation_and_camera_names():
                 {"name": "Wheel_FR", "mesh": 0},
             ],
             "meshes": [{"name": "WheelMesh", "primitives": [{"attributes": {"POSITION": 0}}]}],
-            "accessors": [{}],
+            "accessors": [{"count": 1, "componentType": 5126, "type": "VEC3"}],
             "materials": [{"name": "BODY_PAINT"}, {"name": "INTERIOR"}],
             "animations": [{"name": "OpenDoors"}, {"name": "OpenSunroof"}],
             "cameras": [{"name": "Exterior_Front"}, {"name": "Interior_Driver"}],
@@ -91,7 +91,7 @@ def test_inspection_rejects_animation_channel_node_reference_out_of_range():
         "asset": {"version": "2.0"},
         "nodes": [{"name": "Body"}],
         "animations": [{"name": "OpenDoor", "samplers": [{"input": 0, "output": 1}], "channels": [{"sampler": 0, "target": {"node": 2, "path": "rotation"}}]}],
-        "accessors": [{}, {}],
+        "accessors": [{"count": 1, "componentType": 5126, "type": "SCALAR"}, {"count": 1, "componentType": 5126, "type": "VEC4"}],
     })
     with pytest.raises(ValueError, match="animation channel target node index"):
         inspect_gltf_bytes(payload, filename="car.glb")
@@ -126,6 +126,61 @@ def test_inspection_rejects_skin_joint_reference_out_of_range():
     with pytest.raises(ValueError, match="skin joint index"):
         inspect_gltf_bytes(payload, filename="car.glb")
 
+
+
+def test_inspection_rejects_accessor_buffer_view_reference_out_of_range():
+    payload = make_glb({
+        "asset": {"version": "2.0"},
+        "accessors": [{"count": 1, "componentType": 5126, "type": "VEC3", "bufferView": 1}],
+        "bufferViews": [{"buffer": 0, "byteLength": 12}],
+        "buffers": [{"byteLength": 12}],
+    })
+
+    with pytest.raises(ValueError, match="accessor bufferView index"):
+        inspect_gltf_bytes(payload, filename="car.glb")
+
+
+def test_inspection_rejects_buffer_view_buffer_reference_out_of_range():
+    payload = make_glb({
+        "asset": {"version": "2.0"},
+        "bufferViews": [{"buffer": 1, "byteLength": 12}],
+        "buffers": [{"byteLength": 12}],
+    })
+
+    with pytest.raises(ValueError, match="bufferView buffer index"):
+        inspect_gltf_bytes(payload, filename="car.glb")
+
+
+def test_inspection_rejects_sparse_accessor_references():
+    payload = make_glb({
+        "asset": {"version": "2.0"},
+        "accessors": [{
+            "count": 2,
+            "componentType": 5126,
+            "type": "VEC3",
+            "sparse": {
+                "count": 1,
+                "indices": {"bufferView": 2, "componentType": 5123},
+                "values": {"bufferView": 0},
+            },
+        }],
+        "bufferViews": [{"buffer": 0, "byteLength": 12}],
+        "buffers": [{"byteLength": 12}],
+    })
+
+    with pytest.raises(ValueError, match="sparse indices bufferView index"):
+        inspect_gltf_bytes(payload, filename="car.glb")
+
+
+def test_inspection_rejects_invalid_buffer_view_stride():
+    payload = make_glb({
+        "asset": {"version": "2.0"},
+        "bufferViews": [{"buffer": 0, "byteLength": 12, "byteStride": 3}],
+        "buffers": [{"byteLength": 12}],
+    })
+
+    with pytest.raises(ValueError, match="bufferView byteStride"):
+        inspect_gltf_bytes(payload, filename="car.glb")
 
 def test_inspection_rejects_default_scene_reference_out_of_range():
     payload = make_glb({
