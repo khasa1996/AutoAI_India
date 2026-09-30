@@ -124,6 +124,8 @@ def make_asset_version_router(db: AsyncIOMotorDatabase) -> APIRouter:
                 "revision_id": request.revision_id,
                 "validation_passed": True,
                 "admin_reviewed": True,
+                "published": True,
+                "storage_status": "PUBLISHED",
             },
             {"_id": 0},
         )
