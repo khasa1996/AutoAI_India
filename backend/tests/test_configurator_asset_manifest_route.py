@@ -9,9 +9,17 @@ from configurator_routes import make_configurator_router
 from vehicle_schemas import ConfiguratorStatus
 
 
+class FakeCursor:
+    def __init__(self, documents: list[Dict[str, Any]]) -> None:
+        self.documents = documents
+
+    async def to_list(self, _limit: int) -> list[Dict[str, Any]]:
+        return list(self.documents)
+
+
 class FakeCollection:
     def __init__(self, documents: list[Optional[Dict[str, Any]]]) -> None:
-        self.documents = documents
+        self.documents = [document for document in documents if document is not None]
         self.queries: list[Dict[str, Any]] = []
 
     async def find_one(
@@ -21,6 +29,17 @@ class FakeCollection:
     ) -> Optional[Dict[str, Any]]:
         self.queries.append(query)
         for document in self.documents:\n            if document is not None:\n                return document\n        return None
+
+    def find(
+        self,
+        query: Dict[str, Any],
+        projection: Optional[Dict[str, int]] = None,
+    ) -> FakeCursor:
+        self.queries.append(query)
+        return FakeCursor([
+            document for document in self.documents
+            if all(document.get(key) == value for key, value in query.items())
+        ])
 
 
 class FakeDatabase:
