@@ -84,6 +84,20 @@ class AssetFinalizeUploadRequest(BaseModel):
     expected_checksum_sha256: Optional[str] = Field(None, min_length=64, max_length=64)
 
 
+def validate_inspected_asset_manifest(
+    asset: ConfiguratorAssetCreate,
+    inspected: dict,
+) -> dict:
+    """Validate every declared mapping against names extracted from the uploaded binary."""
+    return validate_asset_manifest(
+        asset,
+        [*inspected.get("mesh_names", []), *inspected.get("node_names", [])],
+        inspected.get("material_names", []),
+        inspected_camera_preset_names=inspected.get("camera_names", []),
+        inspected_animation_names=inspected.get("animation_names", []),
+    )
+
+
 async def _require_admin(authorization: Optional[str] = Header(None)) -> str:
     from server import require_admin
 
@@ -251,11 +265,7 @@ def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         asset = ConfiguratorAssetCreate.model_validate(asset_doc)
-        manifest_result = validate_asset_manifest(
-            asset,
-            [*inspected["mesh_names"], *inspected["node_names"]],
-            inspected["material_names"],
-        )
+        manifest_result = validate_inspected_asset_manifest(asset, inspected)
         structure_result = build_verified_asset_metadata(asset, inspected)
         valid = manifest_result["valid"] and structure_result["valid"]
         now = datetime.now(timezone.utc).isoformat()
