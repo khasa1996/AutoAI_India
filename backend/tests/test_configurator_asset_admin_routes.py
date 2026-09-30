@@ -1,8 +1,11 @@
 import inspect
+from types import SimpleNamespace
+
+import pytest
 
 from fastapi.params import Header as HeaderParam
 
-from configurator_asset_admin_routes import AssetManifestValidationRequest, _require_admin
+from configurator_asset_admin_routes import AssetManifestValidationRequest, _require_admin, build_asset_onboarding_preflight
 from configurator_schemas import AssetEvidence, AssetEvidenceStatus, AssetEvidenceType, AssetProvenance, ConfiguratorAssetCreate
 
 
@@ -58,3 +61,67 @@ def test_publishable_asset_requires_review_and_validation():
 def test_admin_dependency_is_header_bound():
     parameter = inspect.signature(_require_admin).parameters["authorization"]
     assert isinstance(parameter.default, HeaderParam)
+
+
+class _FakeFindCursor:
+    def __init__(self, rows):
+        self.rows = rows
+
+    async def to_list(self, _limit):
+        return list(self.rows)
+
+
+class _FakeCollection:
+    def __init__(self, rows=None):
+        self.rows = rows or []
+
+    async def find_one(self, query, *_args, **_kwargs):
+        for row in self.rows:
+            if all(row.get(key) == value for key, value in query.items()):
+                return dict(row)
+        return None
+
+    def find(self, query, *_args, **_kwargs):
+        return _FakeFindCursor([
+            dict(row) for row in self.rows
+            if all(row.get(key) == value for key, value in query.items())
+        ])
+
+
+@pytest.mark.asyncio
+async def test_asset_onboarding_preflight_reports_readiness_blockers():
+    db = SimpleNamespace(
+        configurator_assets=_FakeCollection([{
+            "asset_id": "asset-001",
+            "variant_id": "variant-001",
+            "version": "1.0.0",
+            "published": False,
+            "validation_passed": False,
+            "provenance": "AUTO_AI_LICENSED",
+            "provenance_evidence": [],
+        }]),
+        variants=_FakeCollection([{
+            "variant_id": "variant-001",
+            "active": True,
+            "verification_status": "verified",
+            "configurator_asset_id": "asset-001",
+            "source": "canonical",
+            "source_url": "https://example.invalid/variant",
+        }]),
+        variant_pricing=_FakeCollection([{
+            "variant_id": "variant-001",
+            "base_ex_showroom": 1000000,
+            "verification_status": "verified",
+            "source": "canonical",
+        }]),
+        variant_colors=_FakeCollection([{"variant_id": "variant-001", "available": True}]),
+        variant_wheels=_FakeCollection([{"variant_id": "variant-001", "available": True}]),
+        variant_interiors=_FakeCollection([{"variant_id": "variant-001", "available": True}]),
+    )
+
+    result = await build_asset_onboarding_preflight(db, "asset-001")
+
+    assert result["ready"] is False
+    assert "configurator asset provenance evidence is missing" in result["blockers"]
+    assert "configurator asset is not published" in result["blockers"]
+
