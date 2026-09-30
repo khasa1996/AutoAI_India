@@ -27,6 +27,7 @@ from configurator_asset_storage import (
 )
 from configurator_asset_validation import validate_asset_manifest
 from configurator_schemas import AssetEvidence, AssetEvidenceStatus, AssetEvidenceType, ConfiguratorAssetCreate, ConfiguratorAsset
+from configurator_vehicle_readiness import assess_vehicle_configurator_readiness
 from vehicle_schemas import ConfiguratorStatus
 
 _MAX_UPLOAD_BYTES = 200 * 1024 * 1024
@@ -84,6 +85,40 @@ async def _require_admin(authorization: Optional[str] = Header(None)) -> str:
 
 def make_asset_admin_router(db: AsyncIOMotorDatabase) -> APIRouter:
     router = APIRouter(prefix="/api/v1/admin/configurator", tags=["configurator-admin"])
+
+    @router.post("/assets/preflight")
+    async def preflight_asset_onboarding(
+        request: AssetPublicationRequest,
+        _: str = Depends(_require_admin),
+    ):
+        asset = await db.configurator_assets.find_one({"asset_id": request.asset_id}, {"_id": 0})
+        if not asset:
+            raise HTTPException(status_code=404, detail="Asset not found")
+
+        variant = await db.variants.find_one({"variant_id": asset.get("variant_id")}, {"_id": 0})
+        if not variant:
+            raise HTTPException(status_code=404, detail="Variant not found for asset")
+
+        pricing = await db.variant_pricing.find_one({"variant_id": asset.get("variant_id")}, {"_id": 0})
+        colors = await db.variant_colors.find({"variant_id": asset.get("variant_id")}, {"_id": 0}).to_list(100)
+        wheels = await db.variant_wheels.find({"variant_id": asset.get("variant_id")}, {"_id": 0}).to_list(100)
+        interiors = await db.variant_interiors.find({"variant_id": asset.get("variant_id")}, {"_id": 0}).to_list(100)
+
+        readiness = assess_vehicle_configurator_readiness(
+            variant,
+            pricing,
+            colors,
+            wheels,
+            interiors,
+            asset,
+        )
+        return {
+            "asset_id": asset.get("asset_id"),
+            "variant_id": asset.get("variant_id"),
+            "ready": readiness["ready"],
+            "blockers": readiness["blockers"],
+            "warnings": readiness["warnings"],
+        }
 
     @router.get("/assets")
     async def list_assets(_: str = Depends(_require_admin)):
