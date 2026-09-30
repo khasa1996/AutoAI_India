@@ -9,7 +9,9 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
+
+from configurator_schemas import AssetEvidence
 
 
 class AssetRollbackRequest(BaseModel):
@@ -46,6 +48,23 @@ async def snapshot_before_upload(db: AsyncIOMotorDatabase, asset: dict) -> Optio
             created_at=now,
         )
     )
+    return revision_id
+
+
+async def create_publication_revision(db: AsyncIOMotorDatabase, asset: dict) -> str:
+    """Create the immutable revision that becomes the runtime publication authority."""
+    now = datetime.now(timezone.utc).isoformat()
+    revision_id = f"rev-{uuid4().hex}"
+    revision = snapshot_asset(
+        asset,
+        revision_id=revision_id,
+        snapshot_type="PUBLICATION",
+        created_at=now,
+    )
+    revision["published"] = True
+    revision["storage_status"] = "PUBLISHED"
+    revision["active_revision_id"] = revision_id
+    await db.configurator_asset_versions.insert_one(revision)
     return revision_id
 
 
@@ -107,6 +126,8 @@ def make_asset_version_router(db: AsyncIOMotorDatabase) -> APIRouter:
                 "revision_id": request.revision_id,
                 "validation_passed": True,
                 "admin_reviewed": True,
+                "published": True,
+                "storage_status": "PUBLISHED",
             },
             {"_id": 0},
         )
@@ -118,6 +139,20 @@ def make_asset_version_router(db: AsyncIOMotorDatabase) -> APIRouter:
 
         if not revision.get("storage_key") or not revision.get("checksum_sha256"):
             raise HTTPException(status_code=422, detail="Rollback target does not contain a verified stored asset")
+
+        provenance_evidence = revision.get("provenance_evidence") or []
+        try:
+            evidence_valid = bool(provenance_evidence) and all(
+                AssetEvidence.model_validate(item).is_verified()
+                for item in provenance_evidence
+            )
+        except ValidationError:
+            evidence_valid = False
+        if not evidence_valid:
+            raise HTTPException(
+                status_code=422,
+                detail="Rollback target must contain complete verified provenance evidence",
+            )
 
         now = datetime.now(timezone.utc).isoformat()
         source_revision = snapshot_asset(

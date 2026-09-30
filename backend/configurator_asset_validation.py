@@ -49,7 +49,7 @@ def validate_asset_manifest(
     )
 
     if not asset.is_publishable():
-        errors.append("Asset is not publishable: provenance, validation, admin review, license and publisher are all required")
+        errors.append("Asset is not publishable: provenance, verified evidence, validation, admin review, license and publisher are all required")
     if asset.provenance == AssetProvenance.AI_GENERATED_CONCEPT:
         errors.append("AI-generated concept assets cannot be published as production vehicle assets")
 
