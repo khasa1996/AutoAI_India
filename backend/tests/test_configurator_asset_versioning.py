@@ -97,6 +97,7 @@ def client():
         "storage_status": "PUBLISHED",
         "provenance_evidence": [{
             "evidence_id": "evidence-001",
+            "evidence_type": "LICENSE_RECORD",
             "status": "VERIFIED",
             "reference": "LICENSE-001",
             "verified_by": "admin",
