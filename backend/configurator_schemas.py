@@ -1,33 +1,14 @@
-"""
-Auto AI India — Configurator Schemas
-=====================================
-Data models for the real 3D configurator system.
-
-Key design rules enforced here:
-  1. Purchasable configuration (paint/wheels/interior/roof) is SEPARATE
-     from showroom interaction state (doors/hood/lighting).
-  2. Pricing is backend-authoritative — AI never sets prices.
-  3. 3D assets require provenance metadata before publication.
-  4. Missing assets produce a clear COMING_SOON/UNAVAILABLE state.
-     They are never silently replaced with a placeholder.
-"""
-
 from __future__ import annotations
-
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-
 class AssetProvenance(str, Enum):
-    """Provenance classification for 3D assets."""
     OEM_AUTHORIZED = "OEM_AUTHORIZED"
     AUTO_AI_LICENSED = "AUTO_AI_LICENSED"
     LICENSED_THIRD_PARTY = "LICENSED_THIRD_PARTY"
     AI_GENERATED_CONCEPT = "AI_GENERATED_CONCEPT"
     UNKNOWN = "UNKNOWN"
-
 
 _PUBLISHABLE_PROVENANCE = {
     AssetProvenance.OEM_AUTHORIZED,
@@ -37,25 +18,19 @@ _PUBLISHABLE_PROVENANCE = {
 _VALID_ASSET_EXTENSIONS = (".glb", ".gltf")
 _MAX_ASSET_BYTES = 200 * 1024 * 1024
 
-
 class AssetEvidenceType(str, Enum):
-    """Evidence category supporting production asset rights and provenance."""
     OEM_AUTHORIZATION = "OEM_AUTHORIZATION"
     LICENSE_AGREEMENT = "LICENSE_AGREEMENT"
     LICENSE_RECORD = "LICENSE_RECORD"
     PROVENANCE_RECORD = "PROVENANCE_RECORD"
     RIGHTS_DECLARATION = "RIGHTS_DECLARATION"
 
-
 class AssetEvidenceStatus(str, Enum):
-    """Verification state of an asset evidence record."""
     VERIFIED = "VERIFIED"
     PENDING = "PENDING"
     REJECTED = "REJECTED"
 
-
 class AssetEvidence(BaseModel):
-    """Auditable evidence supporting the declared asset provenance."""
     evidence_id: str = Field(..., min_length=2, max_length=100)
     evidence_type: AssetEvidenceType
     status: AssetEvidenceStatus = AssetEvidenceStatus.PENDING
@@ -74,7 +49,6 @@ class AssetEvidence(BaseModel):
         return v
 
     def is_verified(self) -> bool:
-        """Return True only when evidence has an auditable verification identity."""
         return (
             self.status == AssetEvidenceStatus.VERIFIED
             and bool(self.reference.strip())
@@ -82,17 +56,13 @@ class AssetEvidence(BaseModel):
             and bool(self.verified_at)
         )
 
-
 class AssetLODLevel(str, Enum):
-    """Level of detail tier."""
     LOD0 = "LOD0"
     LOD1 = "LOD1"
     LOD2 = "LOD2"
     LOD3 = "LOD3"
 
-
 class ConfiguratorAssetCreate(BaseModel):
-    """Metadata record for a production 3D vehicle asset."""
     asset_id: str = Field(..., min_length=2, max_length=100)
     variant_id: str = Field(..., max_length=100)
     model_id: str = Field(..., max_length=80)
@@ -129,9 +99,7 @@ class ConfiguratorAssetCreate(BaseModel):
     @field_validator("url", "cdn_url")
     @classmethod
     def url_must_be_https(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        if not v.startswith("https://"):
+        if v is not None and not v.startswith("https://"):
             raise ValueError("Asset URL must use HTTPS")
         return v
 
@@ -155,21 +123,19 @@ class ConfiguratorAssetCreate(BaseModel):
         return v.lower()
 
     def is_publishable(self) -> bool:
-        """Return True only when all publication gates pass."""
         return (
             self.provenance in _PUBLISHABLE_PROVENANCE
             and self.validation_passed
             and self.admin_reviewed
             and bool(self.license_name)
             and bool(self.publisher)
-            and any(evidence.is_verified() for evidence in self.provenance_evidence)
+            and bool(self.provenance_evidence)
+            and all(evidence.is_verified() for evidence in self.provenance_evidence)
         )
-
 
 class ConfiguratorAsset(ConfiguratorAssetCreate):
     created_at: str
     updated_at: str
-
 
 class ConfiguratorOptionType(str, Enum):
     PAINT = "paint"
@@ -179,9 +145,7 @@ class ConfiguratorOptionType(str, Enum):
     ACCESSORY = "accessory"
     TRIM = "trim"
 
-
 class ConfiguratorOption(BaseModel):
-    """A single purchasable configuration choice."""
     option_id: str = Field(..., max_length=100)
     option_type: ConfiguratorOptionType
     variant_id: str = Field(..., max_length=100)
@@ -193,13 +157,11 @@ class ConfiguratorOption(BaseModel):
     preview_color_hex: Optional[str] = Field(None, max_length=10)
     preview_image_url: Optional[str] = Field(None, max_length=500)
 
-
 class RuleEffect(str, Enum):
     ALLOW = "allow"
     DENY = "deny"
     REQUIRE = "require"
     EXCLUDE = "exclude"
-
 
 class RuleConditionType(str, Enum):
     VARIANT_IS = "variant_is"
@@ -209,14 +171,11 @@ class RuleConditionType(str, Enum):
     DATE_BEFORE = "date_before"
     DATE_AFTER = "date_after"
 
-
 class RuleCondition(BaseModel):
     condition_type: RuleConditionType
     value: Any = Field(..., description="The value to match against")
 
-
 class ConfiguratorRule(BaseModel):
-    """A compatibility rule evaluated by the backend rules engine."""
     rule_id: str = Field(..., max_length=100)
     variant_id: Optional[str] = Field(None, max_length=100)
     model_id: Optional[str] = Field(None, max_length=80)
@@ -228,17 +187,13 @@ class ConfiguratorRule(BaseModel):
     active: bool = True
     priority: int = Field(0, ge=0)
 
-
 class DoorState(BaseModel):
-    """Showroom interaction — does NOT affect price."""
     front_left: bool = False
     front_right: bool = False
     rear_left: bool = False
     rear_right: bool = False
 
-
 class LightingState(BaseModel):
-    """Showroom interaction — does NOT affect price."""
     headlights: bool = False
     drl: bool = False
     taillights: bool = False
@@ -248,9 +203,7 @@ class LightingState(BaseModel):
     hazard: bool = False
     interior: bool = False
 
-
 class InteractionState(BaseModel):
-    """All showroom interactions bundled."""
     doors: DoorState = Field(default_factory=DoorState)
     hood_open: bool = False
     boot_open: bool = False
@@ -259,9 +212,7 @@ class InteractionState(BaseModel):
     lighting: LightingState = Field(default_factory=LightingState)
     camera_preset: Optional[str] = Field(None, max_length=40)
 
-
 class PurchasableConfiguration(BaseModel):
-    """The parts of configuration that affect price."""
     variant_id: str = Field(..., max_length=100)
     paint_id: Optional[str] = Field(None, max_length=80)
     wheel_id: Optional[str] = Field(None, max_length=80)
@@ -276,24 +227,18 @@ class PurchasableConfiguration(BaseModel):
             raise ValueError("Maximum 30 accessories per configuration")
         return v
 
-
 class ConfigurationState(BaseModel):
-    """The complete authoritative configuration state."""
     purchasable: PurchasableConfiguration
     interaction: InteractionState = Field(default_factory=InteractionState)
 
-
 class SavedConfigurationCreate(BaseModel):
-    """Payload for saving a user configuration."""
     configuration: ConfigurationState
     city: Optional[str] = Field(None, max_length=80)
     price_snapshot: Optional[int] = Field(None, ge=0, description="Client snapshot retained for request compatibility; server recalculates before persistence")
     asset_id: Optional[str] = Field(None, max_length=100)
     asset_version: Optional[str] = Field(None, max_length=30)
 
-
 class SavedConfiguration(SavedConfigurationCreate):
-    """A persisted saved configuration."""
     config_id: str
     owner_phone: Optional[str] = None
     share_token: Optional[str] = Field(None, max_length=64)
@@ -303,24 +248,18 @@ class SavedConfiguration(SavedConfigurationCreate):
     stale: bool = False
     stale_reason: Optional[str] = Field(None, max_length=500)
 
-
 class PriceComponent(BaseModel):
-    """A single named component of the on-road price."""
     name: str = Field(..., max_length=80)
     amount: int = Field(..., ge=0)
     description: Optional[str] = Field(None, max_length=200)
 
-
 class ConfigurationPriceRequest(BaseModel):
-    """Request to calculate on-road price for a configuration."""
     configuration: PurchasableConfiguration
     city: Optional[str] = Field(None, max_length=80)
     state: Optional[str] = Field(None, max_length=80)
     offer_codes: List[str] = Field(default_factory=list, max_length=10)
 
-
 class ConfigurationPriceResponse(BaseModel):
-    """Backend-authoritative price breakdown."""
     variant_id: str
     city: Optional[str] = None
     base_ex_showroom: int
@@ -345,21 +284,16 @@ class ConfigurationPriceResponse(BaseModel):
         self.total_discount = sum(c.amount for c in self.offers_applied)
         return self
 
-
 class ValidationResult(BaseModel):
     valid: bool
     errors: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
     rules_applied: List[Dict[str, Any]] = Field(default_factory=list)
 
-
 class ConfigurationValidationRequest(BaseModel):
-    """Request to validate a purchasable configuration."""
     configuration: PurchasableConfiguration
 
-
 class AIConfiguratorIntent(BaseModel):
-    """Structured intent extracted from natural language by the AI."""
     variant_id: str = Field(..., max_length=100)
     raw_request: str = Field(..., max_length=2000)
     preferred_segment: Optional[str] = Field(None, max_length=60)
@@ -374,9 +308,7 @@ class AIConfiguratorIntent(BaseModel):
     lights_on: Optional[bool] = None
     camera_preset: Optional[str] = Field(None, max_length=40)
 
-
 class AIConfiguratorResponse(BaseModel):
-    """The resolved configuration returned after AI intent is validated."""
     configuration: Optional[ConfigurationState] = None
     price: Optional[ConfigurationPriceResponse] = None
     explanation: str = Field(..., max_length=2000)
