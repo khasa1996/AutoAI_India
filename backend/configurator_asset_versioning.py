@@ -9,7 +9,9 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
+
+from configurator_schemas import AssetEvidence
 
 
 class AssetRollbackRequest(BaseModel):
@@ -137,6 +139,20 @@ def make_asset_version_router(db: AsyncIOMotorDatabase) -> APIRouter:
 
         if not revision.get("storage_key") or not revision.get("checksum_sha256"):
             raise HTTPException(status_code=422, detail="Rollback target does not contain a verified stored asset")
+
+        provenance_evidence = revision.get("provenance_evidence") or []
+        try:
+            evidence_valid = bool(provenance_evidence) and all(
+                AssetEvidence.model_validate(item).is_verified()
+                for item in provenance_evidence
+            )
+        except ValidationError:
+            evidence_valid = False
+        if not evidence_valid:
+            raise HTTPException(
+                status_code=422,
+                detail="Rollback target must contain complete verified provenance evidence",
+            )
 
         now = datetime.now(timezone.utc).isoformat()
         source_revision = snapshot_asset(
