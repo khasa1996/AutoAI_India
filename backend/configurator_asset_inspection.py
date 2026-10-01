@@ -90,6 +90,10 @@ def _validate_structural_references(document: Dict[str, Any]) -> None:
         if "byteLength" not in buffer_view:
             raise ValueError(f"GLTF bufferView {buffer_view_index} byteLength is required")
         _require_non_negative_integer(buffer_view["byteLength"], "bufferView byteLength")
+        buffer = buffers[buffer_view["buffer"]]
+        buffer_end = buffer_view.get("byteOffset", 0) + buffer_view["byteLength"]
+        if buffer_end > buffer["byteLength"]:
+            raise ValueError(f"GLTF bufferView {buffer_view_index} exceeds buffer byteLength")
         if "byteStride" in buffer_view:
             stride = buffer_view["byteStride"]
             if not isinstance(stride, int) or isinstance(stride, bool) or stride < 4 or stride > 252 or stride % 4:
