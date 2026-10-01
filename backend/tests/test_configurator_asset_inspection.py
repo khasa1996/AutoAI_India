@@ -128,6 +128,17 @@ def test_inspection_rejects_skin_joint_reference_out_of_range():
 
 
 
+def test_inspection_rejects_buffer_view_that_exceeds_buffer_length():
+    payload = make_glb({
+        "asset": {"version": "2.0"},
+        "bufferViews": [{"buffer": 0, "byteOffset": 8, "byteLength": 8}],
+        "buffers": [{"byteLength": 12}],
+    })
+
+    with pytest.raises(ValueError, match="exceeds buffer byteLength"):
+        inspect_gltf_bytes(payload, filename="car.glb")
+
+
 def test_inspection_rejects_accessor_buffer_view_reference_out_of_range():
     payload = make_glb({
         "asset": {"version": "2.0"},
